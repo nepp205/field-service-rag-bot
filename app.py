@@ -33,3 +33,4 @@ with col2:
 # Footer
 st.markdown("---")
 st.caption("Field Service RAG Bot")
+st.chat_input(placeholder="Your message", key=None, max_chars=None, max_upload_size=None, accept_file=False, file_type=None, accept_audio=False, audio_sample_rate=16000, disabled=False, on_submit=None, args=None, kwargs=None, width="stretch")
