@@ -6,7 +6,8 @@ st.success("✅ Niklas UI")
 st.info("⏳ Marvin Data")
 st.info("⏳ Tobias RAG")
 
-st.text_input("Test-Input")
+test= st.text_input("Test-Input")
+st.info(test)
 st.button("Test")
 
 st.caption("Repo ready - Team loslegen!")
