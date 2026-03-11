@@ -12,16 +12,18 @@
     <p>This is a simple web interface for interacting with the RAG bot.</p>
     <div id="chat-container">
         <div id="chat-box"></div>
-        <input type="text" id="user-input" placeholder="Type your message here...">
-        <button id="send-button">Send</button>
+
+        <!-- input-area groups input + button so they sit on the same row under the chat -->
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Type your message here...">
+            <button id="send-button">Send</button>
+        </div>
     </div>
     
-    <div id="response-container">
-        <div id="response-box">
-            <p id="response-text">Response</p>
-        </div>
+   
 
-    </div>
+
+    
 
 </body>
 
