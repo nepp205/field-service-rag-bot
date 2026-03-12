@@ -10,12 +10,14 @@
 <body>
     <h1>Welcome to the Field Service RAG Bot</h1>
     <p>This is a simple web interface for interacting with the RAG bot.</p>
+    <button id="theme-toggle">🌙</button>
     <div id="chat-container">
-        <div id="chat-box"></div>
-
+        <div id="chat-box"><button id="scroll-down-btn" title="Zum Neuesten">⬇</button></div>
+        
         <!-- input-area groups input + button so they sit on the same row under the chat -->
         <div class="input-area">
             <input type="text" id="user-input" placeholder="Type your message here...">
+            <button id="mic-button" title="Spracheingabe">🎤</button>  <!-- Neu! -->
             <button id="send-button">Send</button>
         </div>
     </div>
