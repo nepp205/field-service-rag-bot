@@ -1,4 +1,11 @@
-/* Mobile-first, sauberes vertikales Layout */
+/* ==========================================================================
+   styles.css – Field-Service RAG Bot
+   Mobile-first, clean vertical layout.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   CSS custom properties (design tokens)
+   -------------------------------------------------------------------------- */
 :root {
     --bg: #f6f7fb;
     --card: #ffffff;
@@ -10,11 +17,17 @@
     --chat-bg: rgba(15,23,42,0.03);
 }
 
+/* --------------------------------------------------------------------------
+   Global reset
+   -------------------------------------------------------------------------- */
 * { box-sizing: border-box; }
 
+/* --------------------------------------------------------------------------
+   Base layout – full-height page, vertically stacked and centred
+   -------------------------------------------------------------------------- */
 html, body {
-    height: 100vh; 
-    margin: 0; 
+    height: 100vh;
+    margin: 0;
     padding: 0;
 }
 
@@ -23,14 +36,16 @@ body {
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     color: var(--text);
     display: flex;
-    flex-direction: column; /* WICHTIG: vertikales Layout */
+    flex-direction: column; /* vertical stack */
     align-items: center;
     gap: 12px;
     padding: 20px;
     overflow: hidden;
 }
 
-/* Page title & intro */
+/* --------------------------------------------------------------------------
+   Page title & intro text
+   -------------------------------------------------------------------------- */
 h1 {
     margin: 10px 0 4px 0;
     font-size: 1.4rem;
@@ -46,7 +61,9 @@ p {
     flex-shrink: 0;
 }
 
-/* Chat shell */
+/* --------------------------------------------------------------------------
+   Chat shell – card that contains the message list and input row
+   -------------------------------------------------------------------------- */
 #chat-container {
     width: 100%;
     max-width: 920px;
@@ -57,13 +74,16 @@ p {
     flex-direction: column;
     gap: 12px;
     padding: 12px;
-  flex:1; height: 0;
+    flex: 1;
+    height: 0; /* allows flex child to grow without overflowing the viewport */
 }
 
-/* Chat box (messages) */
+/* --------------------------------------------------------------------------
+   Chat box – scrollable message list
+   -------------------------------------------------------------------------- */
 #chat-box {
-  position: relative;  
-  width: 100%;
+    position: relative;
+    width: 100%;
     min-height: 320px;
     max-height: 65vh;
     background: var(--chat-bg);
@@ -76,7 +96,10 @@ p {
     flex: 1;
 }
 
-/* Single message */
+/* --------------------------------------------------------------------------
+   Message bubbles
+   -------------------------------------------------------------------------- */
+/* Single message row */
 .message {
     display: flex;
     gap: 10px;
@@ -92,7 +115,7 @@ p {
     box-shadow: 0 1px 0 rgba(0,0,0,0.03);
 }
 
-/* User: Rechts */
+/* User messages: right-aligned */
 .message.user {
     justify-content: flex-end;
 }
@@ -103,7 +126,7 @@ p {
     border-bottom-right-radius: 6px;
 }
 
-/* Bot: Links + VERTIKALER STACK */
+/* Bot messages: left-aligned, stacked vertically to accommodate the source panel */
 .message.bot {
     justify-content: flex-start;
     flex-direction: column;      /* ← VERTIKAL! */
@@ -118,7 +141,10 @@ p {
     align-self: flex-start;      /* ← Ganz links */
 }
 
-/* Quellen-Ausklapper */
+/* --------------------------------------------------------------------------
+   Source-document collapsible panel (shown below bot messages)
+   -------------------------------------------------------------------------- */
+/* Toggle link that expands / collapses the panel */
 .source-toggle {
     font-size: 0.85rem;
     color: #007bff;
@@ -155,6 +181,9 @@ p {
     margin-top: 6px;
 }
 
+/* --------------------------------------------------------------------------
+   Input area – text field, mic button, send button
+   -------------------------------------------------------------------------- */
 /* Input area */
 .input-area {
     display: flex;
@@ -190,6 +219,9 @@ p {
     transform: translateY(1px);
 }
 
+/* --------------------------------------------------------------------------
+   Mic button
+   -------------------------------------------------------------------------- */
 /* Mikrofon Button */
 #mic-button {
     font-size: 1.2em;
@@ -207,6 +239,9 @@ p {
     background: #0056b3;
 }
 
+/* --------------------------------------------------------------------------
+   Responsive breakpoints
+   -------------------------------------------------------------------------- */
 /* Responsive */
 @media (max-width: 600px) {
     body { padding: 12px; }
@@ -276,6 +311,9 @@ p {
     color: var(--text);
     margin-left: 4px;
 }
+/* --------------------------------------------------------------------------
+   Dark theme overrides
+   -------------------------------------------------------------------------- */
 [data-theme="dark"] {
     --bg: #0f172a;
     --card: #1e293b;
@@ -294,6 +332,9 @@ p {
     }
 }
 
+/* --------------------------------------------------------------------------
+   Scroll-to-bottom floating button
+   -------------------------------------------------------------------------- */
 #scroll-down-btn {
     position: fixed;
     bottom: 150px;        /* ← 12px über ChatBox‑Unterkante */

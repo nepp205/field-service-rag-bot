@@ -5,28 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Field Service RAG Bot</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- script.js is deferred so the DOM is ready before JS runs -->
     <script src="script.js" defer></script>
 </head>
 <body>
     <h1>Welcome to the Field Service RAG Bot</h1>
     <p>This is a simple web interface for interacting with the RAG bot.</p>
+
+    <!-- Light/dark theme toggle button (top of page) -->
     <button id="theme-toggle">🌙</button>
+
+    <!-- Main chat shell -->
     <div id="chat-container">
-        <div id="chat-box"><button id="scroll-down-btn" title="Zum Neuesten">⬇</button></div>
-        
-        <!-- input-area groups input + button so they sit on the same row under the chat -->
+
+        <!-- Scrollable message list; the scroll-to-bottom button overlays it -->
+        <div id="chat-box">
+            <button id="scroll-down-btn" title="Zum Neuesten">⬇</button>
+        </div>
+
+        <!-- Input row: text field + mic button + send button -->
         <div class="input-area">
             <input type="text" id="user-input" placeholder="Type your message here...">
-            <button id="mic-button" title="Spracheingabe">🎤</button>  <!-- Neu! -->
+            <button id="mic-button" title="Spracheingabe">🎤</button>
             <button id="send-button">Send</button>
         </div>
+
     </div>
-    
-   
-
-
-    
-
 </body>
-
 </html>
