@@ -177,6 +177,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
+    // Typing indicator
+    // ============================================================
+
+    /**
+     * Append an animated typing-indicator bubble to the chat box.
+     * Returns the wrapper element so it can be removed when the response arrives.
+     *
+     * @returns {HTMLElement} The `.message.bot` wrapper element.
+     */
+    function addTypingIndicator() {
+        const m = document.createElement('div');
+        m.className = 'message bot';
+
+        const indicator = document.createElement('div');
+        indicator.className = 'typing-indicator';
+
+        const dots = document.createElement('div');
+        dots.className = 'typing-dots';
+        for (let i = 0; i < 3; i++) {
+            const dot = document.createElement('span');
+            dot.className = 'typing-dot';
+            dots.appendChild(dot);
+        }
+
+        const label = document.createElement('span');
+        label.className = 'typing-text';
+        label.textContent = 'Diagnose wird erstellt...';
+
+        indicator.appendChild(dots);
+        indicator.appendChild(label);
+        m.appendChild(indicator);
+
+        chatBox.appendChild(m);
+        scrollToBottom();
+        return m;
+    }
+
+    // ============================================================
     // Backend API
     // ============================================================
 
@@ -195,9 +233,8 @@ document.addEventListener('DOMContentLoaded', () => {
         addMessage('user', value);
         userInput.value = '';
 
-        // Temporary thinking placeholder shown while the request is in-flight
-        const thinkingText = 'Diagnose wird erstellt...';
-        addMessage('bot', thinkingText);
+        // Animated typing-indicator shown while the request is in-flight
+        const thinkingBubble = addTypingIndicator();
         if (sendBtn) sendBtn.disabled = true;
 
         const start      = Date.now();
@@ -218,16 +255,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const wait    = Math.max(0, MIN_WAIT_MS - elapsed);
 
             setTimeout(() => {
-                // Remove the thinking placeholder before showing the real answer
-                const msgs    = chatBox.querySelectorAll('.message.bot');
-                const lastBot = msgs[msgs.length - 1];
-                if (lastBot && lastBot.textContent === thinkingText) {
-                    lastBot.remove();
-                }
-
+                thinkingBubble.remove();
                 addMessage('bot', answer);
                 speak(answer); // auto-read the bot's reply aloud
-
                 if (sendBtn) sendBtn.disabled = false;
             }, wait);
 
@@ -238,12 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const wait    = Math.max(0, MIN_WAIT_MS - elapsed);
 
             setTimeout(() => {
-                // Remove the thinking placeholder before showing the error message
-                const msgs    = chatBox.querySelectorAll('.message.bot');
-                const lastBot = msgs[msgs.length - 1];
-                if (lastBot && lastBot.textContent === thinkingText) {
-                    lastBot.remove();
-                }
+                thinkingBubble.remove();
                 addMessage('bot', 'Fehler beim Kontakt zum LLM Backend.');
                 if (sendBtn) sendBtn.disabled = false;
             }, wait);

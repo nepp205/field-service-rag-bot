@@ -62,6 +62,27 @@ p {
 }
 
 /* --------------------------------------------------------------------------
+   Theme-toggle button
+   -------------------------------------------------------------------------- */
+#theme-toggle {
+    position: fixed;
+    top: 12px;
+    right: 16px;
+    background: transparent;
+    border: 1px solid rgba(15,23,42,0.15);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    z-index: 100;
+    line-height: 1;
+}
+
+#theme-toggle:hover {
+    background: rgba(15,23,42,0.06);
+}
+
+/* --------------------------------------------------------------------------
    Chat shell – card that contains the message list and input row
    -------------------------------------------------------------------------- */
 #chat-container {
@@ -327,7 +348,7 @@ p {
         color: #cbd5e1;
     }
     #theme-toggle {
-        background: transparent;
+        border-color: rgba(255,255,255,0.15);
         color: #cbd5e1;
     }
 }
