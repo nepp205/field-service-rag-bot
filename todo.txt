@@ -1,48 +1,28 @@
-TODO fuer Marvin – Field Service RAG Bot (Stand: 31.03.2026)
-=============================================================
+TODO fuer Marvin – ChromaDB Vektordatenbank (Stand: 31.03.2026)
+================================================================
 
-Was wir vorbereitet haben
---------------------------
-- FastAPI Backend (requesthandler.py) mit /api/chat Endpunkt
-- RAG-Pipeline (rag_core.py) – holt passende Handbuch-Abschnitte aus ChromaDB
-  und schickt sie zusammen mit der Frage an das Azure OpenAI LLM
-- Azure AI Foundry Integration ueber den openai-Python-Client (AzureOpenAI)
-- Chat-Frontend (webpage/) mit Dark Mode, Spracheingabe (STT) und Vorlesen (TTS)
-- Dockerfile fuer HuggingFace Docker Space (Port 7860)
-- requirements.txt mit allen Python-Abhaengigkeiten
+Was bereits vorbereitet ist
+-----------------------------
+- DB/build_db.py  – liest das Miele-PDF ein, zerlegt es in Chunks
+                    und speichert Embeddings in ChromaDB
+- DB/Miele-PFD-401-MasterLine-Bedienungsanleitung.pdf  – das Quell-Handbuch
+- rag_core.py erwartet die fertige DB unter dem Pfad /data/chroma_db
+  mit dem Collection-Namen "mini_rag_test" und dem Embedding-Modell "all-MiniLM-L6-v2"
 
 
-Was du noch erledigen musst, damit es laeuft
----------------------------------------------
+Was du (Marvin) noch tun musst
+--------------------------------
 
-1. Azure AI Foundry Key eintragen
-   - Geh in deinen HuggingFace Space unter Settings > Secrets
-   - Trage folgende vier Werte ein (Platzhalter durch echte Werte ersetzen):
-       AZURE_OPENAI_ENDPOINT    = https://DEIN-RESOURCE.openai.azure.com/
-       AZURE_OPENAI_API_KEY     = dein-echter-key
-       AZURE_OPENAI_DEPLOYMENT  = gpt-4o   (oder wie dein Deployment heisst)
-       AZURE_OPENAI_API_VERSION = 2024-02-01
+1. PDF-Pfad in build_db.py anpassen
+   - Die Variable PDF_PATH zeigt aktuell auf einen lokalen Entwicklungspfad
+   - Aendern auf den Pfad, wo das PDF im fertigen Container liegt
+     (z.B. relativ zum Skript: Path(__file__).parent / "Miele-PFD-401-MasterLine-Bedienungsanleitung.pdf")
 
-2. ChromaDB Vektordatenbank aufbauen
-   - Die DB/build_db.py muss einmal ausgefuehrt werden, bevor der Server startet
-   - Sie liest das PDF ein, zerlegt es in Chunks und speichert die Embeddings
-   - Optionen:
-     a) Lokal ausfuehren und chroma_db/ Ordner in den Space hochladen, ODER
-     b) Ein Startup-Skript im Dockerfile ergaenzen, das build_db.py einmalig ausfuehrt
-        (z.B. via ENTRYPOINT-Wrapper der prueft ob /data/chroma_db schon befuellt ist)
-   - Der CHROMA_PATH muss auf /data/chroma_db zeigen (HF Persistent Storage)
+2. Speicherpfad fuer ChromaDB anpassen
+   - Die Variable im PersistentClient-Aufruf zeigt aktuell auf "./chroma_db"
+   - Muss auf /data/chroma_db zeigen, damit rag_core.py die DB findet
+   - Idealerweise per Umgebungsvariable CHROMA_PATH steuerbar machen
 
-3. HuggingFace Space erstellen
-   - Neuen Space anlegen, Typ: Docker
-   - Dieses Repository als Quelle verbinden (oder manuell pushen)
-   - Unter Space Settings > Persistent Storage aktivieren (damit die DB erhalten bleibt)
-   - Die vier Azure-Secrets aus Schritt 1 eintragen
-
-
-Kurz-Zusammenfassung des Datenflusses
----------------------------------------
-Nutzer-Frage im Browser
-  -> /api/chat (FastAPI)
-  -> ChromaDB sucht die 5 aehnlichsten Handbuch-Abschnitte
-  -> Azure OpenAI bekommt Frage + Kontext und antwortet auf Deutsch
-  -> Antwort geht zurueck ans Frontend, wird auch vorgelesen (TTS)
+3. build_db.py einmal ausfuehren bevor der Server startet
+   - Skript liest PDF, erzeugt Chunks, speichert Embeddings – dauert ein paar Minuten
+   - Danach liegt die fertige DB unter /data/chroma_db und muss nicht nochmal gebaut werden
