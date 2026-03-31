@@ -1,24 +1,49 @@
 """FastAPI request handler for the Field-Service RAG Bot.
 
-Exposes a single POST endpoint ``/api/chat`` that accepts a user message
-together with a session ID and returns a plain-text answer.
+Exposes a POST endpoint ``/api/chat`` and serves the static front-end.
 
-The response is currently a demo stub; replace the body of ``chat()`` with
-a call to the RAG pipeline (rag_core.RAG) and the Azure OpenAI LLM once
-those components are ready.
+The RAG pipeline (rag_core.RAG) is initialised on startup once the
+ChromaDB vector store is available.  On a fresh deployment the vector
+store must be built first – see todo.txt for the required steps.
 
 Usage:
     uvicorn requesthandler:app --reload
 """
 
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
-app = FastAPI(title="Field-Service RAG Bot API")
+from rag_core import RAG
 
-# Allow all origins for the demo phase.
-# Restrict `allow_origins` to the actual front-end URL in production.
+logger = logging.getLogger("requesthandler")
+logging.basicConfig(level=logging.INFO)
+
+_rag: RAG | None = None
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):  # noqa: ARG001
+    """Initialise the RAG pipeline on startup."""
+    global _rag  # noqa: PLW0603
+
+    # TODO (Marvin): ensure the ChromaDB vector store is built before starting.
+    # See todo.txt for the required setup steps.
+    _rag = RAG()
+    logger.info("RAG pipeline ready.")
+    yield
+
+
+app = FastAPI(title="Field-Service RAG Bot API", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,6 +51,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static assets (CSS, JS) from the webpage directory
+_WEBPAGE_DIR = Path(__file__).parent / "webpage"
+app.mount("/static", StaticFiles(directory=str(_WEBPAGE_DIR)), name="static")
 
 
 class ChatRequest(BaseModel):
@@ -41,9 +70,15 @@ class ChatResponse(BaseModel):
     answer: str
 
 
+@app.get("/")
+async def index() -> FileResponse:
+    """Serve the chat UI."""
+    return FileResponse(str(_WEBPAGE_DIR / "index.html"))
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
-    """Handle a chat request and return an answer.
+    """Handle a chat request and return a RAG-generated answer.
 
     Args:
         req: The incoming request containing the user's message and a
@@ -51,15 +86,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     Returns:
         A ``ChatResponse`` with the generated answer string.
-
-    TODO: Replace the demo stub below with a call to the RAG pipeline,
-          e.g.::
-
-              from rag_core import RAG
-              rag = RAG()
-              result = rag.answer(req.message)
-              return ChatResponse(answer=result["content"])
     """
-    # Demo stub – returns the user's message echoed back
-    demo_answer = f"Demo-Antwort für: {req.message}"
-    return ChatResponse(answer=demo_answer)
+    if _rag is None:
+        return ChatResponse(answer="RAG-Pipeline noch nicht bereit, bitte kurz warten.")
+
+    result = _rag.answer(req.message)
+    return ChatResponse(answer=result["content"])
