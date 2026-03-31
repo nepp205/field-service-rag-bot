@@ -1,95 +1,118 @@
+"""Build (or rebuild) the ChromaDB vector store from a PDF.
+
+Can be run as a standalone script for local development or called
+programmatically from the FastAPI lifespan hook on first boot.
+
+Standalone usage:
+    python DB/build_db.py
+"""
+
+from __future__ import annotations
+
+import os
 from pathlib import Path
 from typing import List
 
-from pypdf import PdfReader
-from sentence_transformers import SentenceTransformer
 import chromadb
 from chromadb.utils import embedding_functions
+from pypdf import PdfReader
+from sentence_transformers import SentenceTransformer
 
 # =============================================================
-# Konfiguration – alles was du anpassen musst ist hier
+# Defaults – override via function arguments or environment vars
 # =============================================================
-PDF_PATH = Path("./field-service-rag-bot/DB/Miele-PFD-401-MasterLine-Bedienungsanleitung.pdf")              # ← dein PDF hier
-CHUNK_SIZE = 350                         # Zeichen pro Chunk
-CHUNK_OVERLAP = 80                       # Überlappung damit nichts abgeschnitten wird
-COLLECTION_NAME = "mini_rag_test"
+_DEFAULT_PDF = Path(__file__).parent / "Miele-PFD-401-MasterLine-Bedienungsanleitung.pdf"
+_DEFAULT_CHROMA_PATH = os.getenv("CHROMA_PATH", "/data/chroma_db")
+_DEFAULT_COLLECTION = "mini_rag_test"
 
-# Embedding-Modell (schnell & gut genug für den Anfang)
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"     # 384 Dimensionen, sehr schnell auf CPU
+CHUNK_SIZE = 350
+CHUNK_OVERLAP = 80
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
 
 # =============================================================
-def extract_text_from_pdf(pdf_path: Path) -> str:
-    """Extrahiert allen Text aus dem PDF (sehr einfach gehalten)"""
+def _extract_text(pdf_path: Path) -> str:
+    """Extract all text from a PDF file."""
     reader = PdfReader(pdf_path)
-    full_text = ""
-    for page in reader.pages:
-        text = page.extract_text() or ""
-        full_text += text + "\n\n"
-    return full_text.strip()
+    pages = [page.extract_text() or "" for page in reader.pages]
+    return "\n\n".join(pages).strip()
 
 
-def split_text_into_chunks(text: str, chunk_size: int, overlap: int) -> List[str]:
-    """Teilt Text in überlappende Chunks"""
-    chunks = []
+def _split_chunks(text: str, chunk_size: int, overlap: int) -> List[str]:
+    """Split *text* into overlapping fixed-size character chunks."""
+    chunks: List[str] = []
     start = 0
     while start < len(text):
-        end = start + chunk_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        start = end - overlap
+        chunks.append(text[start : start + chunk_size])
+        start += chunk_size - overlap
     return chunks
 
 
-def main():
-    print(f"Lade PDF ............. {PDF_PATH}")
-    raw_text = extract_text_from_pdf(PDF_PATH)
-    print(f"Extrahierter Text:    {len(raw_text):,} Zeichen")
+def build(
+    pdf_path: Path = _DEFAULT_PDF,
+    chroma_path: str = _DEFAULT_CHROMA_PATH,
+    collection_name: str = _DEFAULT_COLLECTION,
+) -> None:
+    """Ingest *pdf_path* into a ChromaDB collection at *chroma_path*.
 
-    print("Teile in Chunks ......")
-    chunks = split_text_into_chunks(raw_text, CHUNK_SIZE, CHUNK_OVERLAP)
-    print(f"Erzeugt {len(chunks)} Chunks")
+    An existing collection with the same name is deleted first so the
+    function is safe to call multiple times (idempotent).
 
-    print(f"Lade Embedding-Modell: {EMBEDDING_MODEL}")
-    embedder = SentenceTransformer(EMBEDDING_MODEL)
+    Args:
+        pdf_path:        Path to the source PDF.
+        chroma_path:     Directory used by ChromaDB for persistence.
+        collection_name: Name of the ChromaDB collection to (re-)create.
+    """
+    print(f"Loading PDF .......... {pdf_path}")
+    raw_text = _extract_text(pdf_path)
+    print(f"Extracted text:      {len(raw_text):,} characters")
 
-    print("Verbinde mit Chroma (lokal, speichert in ./chroma_db/)")
-    client = chromadb.PersistentClient(path="./chroma_db")
-    
-    # Lösche alte Collection falls vorhanden (für saubere Tests)
+    print("Splitting into chunks …")
+    chunks = _split_chunks(raw_text, CHUNK_SIZE, CHUNK_OVERLAP)
+    print(f"Created {len(chunks)} chunks")
+
+    print(f"Loading embedding model: {EMBEDDING_MODEL}")
+    # Pre-load to warm the cache before connecting to Chroma
+    SentenceTransformer(EMBEDDING_MODEL)
+
+    print(f"Connecting to ChromaDB at {chroma_path!r} …")
+    client = chromadb.PersistentClient(path=chroma_path)
+
     try:
-        client.delete_collection(COLLECTION_NAME)
-    except:
+        client.delete_collection(collection_name)
+    except Exception:
         pass
-    
-    collection = client.create_collection(
-        name=COLLECTION_NAME,
-        embedding_function=embedding_functions.SentenceTransformerEmbeddingFunction(model_name=EMBEDDING_MODEL)
-    )
 
-    # Wir fügen die Chunks + automatisch generierte Embeddings hinzu
-    print("Speichere Chunks in Vektordatenbank ...")
-    ids = [f"chunk_{i}" for i in range(len(chunks))]
-    
+    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name=EMBEDDING_MODEL
+    )
+    collection = client.create_collection(name=collection_name, embedding_function=ef)
+
+    print("Storing chunks in vector database …")
     collection.add(
         documents=chunks,
-        ids=ids,
-        # metadatas=[{"source": "test.pdf", "chunk_index": i} for i in range(len(chunks))],
+        ids=[f"chunk_{i}" for i in range(len(chunks))],
     )
-    print("Fertig gespeichert!")
+    print(f"Done – {len(chunks)} chunks stored in collection '{collection_name}'.")
 
-    # ───────────────────────────────────────────────
-    # Test-Suche
-    # ───────────────────────────────────────────────
+
+def _smoke_test(chroma_path: str, collection_name: str) -> None:
+    """Quick sanity-check query after a local build."""
+    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name=EMBEDDING_MODEL
+    )
+    client = chromadb.PersistentClient(path=chroma_path)
+    collection = client.get_collection(name=collection_name, embedding_function=ef)
+
     query = "Filter wechseln"
-
-    results = collection.query(
-            query_texts=[query],
-            n_results=5
-    )
-    print(f"\nQuery: {query}")
-    for i, (doc, dist) in enumerate(zip(results["documents"][0], results["distances"][0]), 1):
-        print(f"  {i}. Score: {dist:.4f}   |   {doc[:120]}...")
+    results = collection.query(query_texts=[query], n_results=5)
+    print(f"\nSmoke-test query: {query!r}")
+    for i, (doc, dist) in enumerate(
+        zip(results["documents"][0], results["distances"][0]), 1
+    ):
+        print(f"  {i}. Score: {dist:.4f}   |   {doc[:120]} …")
 
 
 if __name__ == "__main__":
-    main()
+    build()
+    _smoke_test(chroma_path=_DEFAULT_CHROMA_PATH, collection_name=_DEFAULT_COLLECTION)

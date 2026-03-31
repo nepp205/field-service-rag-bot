@@ -1,24 +1,66 @@
 """FastAPI request handler for the Field-Service RAG Bot.
 
-Exposes a single POST endpoint ``/api/chat`` that accepts a user message
-together with a session ID and returns a plain-text answer.
+Exposes a POST endpoint ``/api/chat`` and serves the static front-end.
 
-The response is currently a demo stub; replace the body of ``chat()`` with
-a call to the RAG pipeline (rag_core.RAG) and the Azure OpenAI LLM once
-those components are ready.
+On startup the handler checks whether the ChromaDB vector store already
+exists under ``CHROMA_PATH`` (default ``/data/chroma_db``).  If it does
+not exist the PDF is ingested automatically so the first cold boot on a
+fresh HuggingFace Space with Persistent Storage works without any manual
+intervention.
 
 Usage:
     uvicorn requesthandler:app --reload
 """
 
+from __future__ import annotations
+
+import logging
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
-app = FastAPI(title="Field-Service RAG Bot API")
+from DB.build_db import build
+from rag_core import CHROMA_PATH, COLLECTION_NAME, RAG
 
-# Allow all origins for the demo phase.
-# Restrict `allow_origins` to the actual front-end URL in production.
+logger = logging.getLogger("requesthandler")
+logging.basicConfig(level=logging.INFO)
+
+_rag: RAG | None = None
+
+PDF_PATH = Path(__file__).parent / "DB" / "Miele-PFD-401-MasterLine-Bedienungsanleitung.pdf"
+
+
+def _db_exists() -> bool:
+    """Return True when the ChromaDB collection directory is already populated."""
+    chroma_dir = Path(CHROMA_PATH)
+    return chroma_dir.exists() and any(chroma_dir.iterdir())
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):  # noqa: ARG001
+    """Build the vector DB on first boot, then initialise the RAG pipeline."""
+    global _rag  # noqa: PLW0603
+
+    if not _db_exists():
+        logger.info("ChromaDB not found at %s – building from PDF …", CHROMA_PATH)
+        build(pdf_path=PDF_PATH, chroma_path=CHROMA_PATH, collection_name=COLLECTION_NAME)
+        logger.info("ChromaDB build complete.")
+    else:
+        logger.info("ChromaDB found at %s – skipping build.", CHROMA_PATH)
+
+    _rag = RAG()
+    logger.info("RAG pipeline ready.")
+    yield
+
+
+app = FastAPI(title="Field-Service RAG Bot API", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,6 +68,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static assets (CSS, JS) from the webpage directory
+_WEBPAGE_DIR = Path(__file__).parent / "webpage"
+app.mount("/static", StaticFiles(directory=str(_WEBPAGE_DIR)), name="static")
 
 
 class ChatRequest(BaseModel):
@@ -41,9 +87,15 @@ class ChatResponse(BaseModel):
     answer: str
 
 
+@app.get("/")
+async def index() -> FileResponse:
+    """Serve the chat UI."""
+    return FileResponse(str(_WEBPAGE_DIR / "index.html"))
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
-    """Handle a chat request and return an answer.
+    """Handle a chat request and return a RAG-generated answer.
 
     Args:
         req: The incoming request containing the user's message and a
@@ -51,15 +103,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     Returns:
         A ``ChatResponse`` with the generated answer string.
-
-    TODO: Replace the demo stub below with a call to the RAG pipeline,
-          e.g.::
-
-              from rag_core import RAG
-              rag = RAG()
-              result = rag.answer(req.message)
-              return ChatResponse(answer=result["content"])
     """
-    # Demo stub – returns the user's message echoed back
-    demo_answer = f"Demo-Antwort für: {req.message}"
-    return ChatResponse(answer=demo_answer)
+    if _rag is None:
+        return ChatResponse(answer="RAG-Pipeline noch nicht bereit, bitte kurz warten.")
+
+    result = _rag.answer(req.message)
+    return ChatResponse(answer=result["content"])

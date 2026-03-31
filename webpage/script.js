@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Backend API
     // ============================================================
 
-    const API_URL   = 'http://localhost:8000/api/chat';
+    const API_URL   = '/api/chat';
     const SESSION_ID = 'demo-session-1';
 
     /**
