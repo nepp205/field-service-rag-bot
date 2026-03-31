@@ -1,0 +1,28 @@
+TODO fuer Marvin – ChromaDB Vektordatenbank (Stand: 31.03.2026)
+================================================================
+
+Was bereits vorbereitet ist
+-----------------------------
+- DB/build_db.py  – liest das Miele-PDF ein, zerlegt es in Chunks
+                    und speichert Embeddings in ChromaDB
+- DB/Miele-PFD-401-MasterLine-Bedienungsanleitung.pdf  – das Quell-Handbuch
+- rag_core.py erwartet die fertige DB unter dem Pfad /data/chroma_db
+  mit dem Collection-Namen "mini_rag_test" und dem Embedding-Modell "all-MiniLM-L6-v2"
+
+
+Was du (Marvin) noch tun musst
+--------------------------------
+
+1. PDF-Pfad in build_db.py anpassen
+   - Die Variable PDF_PATH zeigt aktuell auf einen lokalen Entwicklungspfad
+   - Aendern auf den Pfad, wo das PDF im fertigen Container liegt
+     (z.B. relativ zum Skript: Path(__file__).parent / "Miele-PFD-401-MasterLine-Bedienungsanleitung.pdf")
+
+2. Speicherpfad fuer ChromaDB anpassen
+   - Die Variable im PersistentClient-Aufruf zeigt aktuell auf "./chroma_db"
+   - Muss auf /data/chroma_db zeigen, damit rag_core.py die DB findet
+   - Idealerweise per Umgebungsvariable CHROMA_PATH steuerbar machen
+
+3. build_db.py einmal ausfuehren bevor der Server startet
+   - Skript liest PDF, erzeugt Chunks, speichert Embeddings – dauert ein paar Minuten
+   - Danach liegt die fertige DB unter /data/chroma_db und muss nicht nochmal gebaut werden
