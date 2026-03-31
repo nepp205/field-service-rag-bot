@@ -33,6 +33,21 @@ jobs:
             --exclude "data/" \
             --exclude "chroma/"
 
+      - name: Space README erzeugen
+        run: |
+          cat > deploy/README.md <<'EOF'
+          ---
+          title: Field Service Rag Bot
+          emoji: 🐨
+          colorFrom: purple
+          colorTo: yellow
+          sdk: docker
+          pinned: false
+          ---
+          
+          # Field Service Rag Bot
+          EOF
+
       - name: Frisches Git nur fuer Deploy initialisieren
         run: |
           cd deploy
