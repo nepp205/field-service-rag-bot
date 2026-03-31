@@ -20,18 +20,18 @@ jobs:
           rsync -av . deploy \
             --exclude .git \
             --exclude .github \
-           --exclude "*.pdf" \
-          --exclude "*.PDF" \
+            --exclude "README.md" \
+            --exclude "*.pdf" \
+            --exclude "*.PDF" \
             --exclude "*.docx" \
             --exclude "*.pptx" \
             --exclude "*.zip" \
-            --exclude "*.faiss" \
             --exclude "*.sqlite" \
             --exclude "*.db" \
+            --exclude "*.faiss" \
             --exclude "DB/" \
             --exclude "data/" \
-            --exclude "chroma/" \
-            --exclude "__pycache__/" \
+            --exclude "chroma/"
 
       - name: Frisches Git nur fuer Deploy initialisieren
         run: |
@@ -41,7 +41,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Deploy to Hugging Face Space"
+          git commit -m "Deploy clean copy to Hugging Face Space"
 
       - name: In Space pushen
         env:
