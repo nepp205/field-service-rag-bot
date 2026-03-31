@@ -58,7 +58,12 @@ class RAG:
             A dict with key ``content`` containing the generated answer string.
         """
         results = self.collection.query(query_texts=[question], n_results=TOP_K)
-        context = "\n\n---\n\n".join(results["documents"][0])
+        docs = results.get("documents", [[]])[0]
+
+        if not docs:
+            return {"content": "Im Handbuch wurde kein passender Abschnitt zu dieser Frage gefunden."}
+
+        context = "\n\n---\n\n".join(docs)
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -75,4 +80,8 @@ class RAG:
             max_tokens=1024,
         )
 
-        return {"content": response.choices[0].message.content}
+        choices = response.choices
+        if not choices or choices[0].message.content is None:
+            return {"content": "Keine Antwort vom LLM erhalten – bitte erneut versuchen."}
+
+        return {"content": choices[0].message.content}

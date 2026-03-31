@@ -80,8 +80,8 @@ def build(
 
     try:
         client.delete_collection(collection_name)
-    except Exception:
-        pass
+    except Exception as exc:  # collection may not exist yet on first run
+        print(f"Note: could not delete existing collection ({exc})")
 
     ef = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name=EMBEDDING_MODEL
