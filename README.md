@@ -12,12 +12,14 @@ A Retrieval-Augmented Generation (RAG) chatbot designed for field-service techni
   - [DB – Vector Database Builder](#db--vector-database-builder)
   - [requesthandler.py – FastAPI Backend](#requesthandlerpy--fastapi-backend)
   - [webpage – Frontend UI](#webpage--frontend-ui)
+  - [scripts/check_env.py – Environment Checker](#scriptscheck_envpy--environment-checker)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
-  - [Step 1 – Build the Vector Database](#step-1--build-the-vector-database)
-  - [Step 2 – Start the Backend API](#step-2--start-the-backend-api)
-  - [Step 3 – Open the Frontend](#step-3--open-the-frontend)
+  - [Step 1 – Configure Environment Variables](#step-1--configure-environment-variables)
+  - [Step 2 – Build the Vector Database](#step-2--build-the-vector-database)
+  - [Step 3 – Start the Backend API](#step-3--start-the-backend-api)
+  - [Step 4 – Open the Frontend](#step-4--open-the-frontend)
 - [Configuration](#configuration)
 
 ---
@@ -27,12 +29,12 @@ A Retrieval-Augmented Generation (RAG) chatbot designed for field-service techni
 ```
 PDF Manuals  ──►  DB/build_db.py  ──►  ChromaDB (./chroma_db/)
                                               │
-                                              ▼
-Browser  ◄──►  webpage/  ◄──►  requesthandler.py (FastAPI)  ──►  RAG Pipeline (planned)
+                                              ▼ (RAG retrieval – planned)
+Browser  ◄──►  webpage/  ◄──►  requesthandler.py (FastAPI)  ──►  Azure OpenAI API
 ```
 
 1. **DB layer** – Extracts text from PDF manuals, splits it into overlapping chunks, embeds each chunk with a sentence-transformer model, and stores everything in a local ChromaDB instance.
-2. **API layer** – A FastAPI application that receives chat messages from the browser and (once the RAG pipeline is wired in) queries ChromaDB to retrieve the most relevant chunks before sending them to an LLM.
+2. **API layer** – A FastAPI application that receives chat messages from the browser and forwards them to the Azure OpenAI chat completions API. Wiring in ChromaDB-backed context retrieval (the RAG step) is the next planned milestone.
 3. **Frontend layer** – A plain HTML/CSS/JS chat interface with speech-to-text input and text-to-speech output.
 
 ---
@@ -44,11 +46,14 @@ field-service-rag-bot/
 ├── DB/
 │   ├── build_db.py                              # Builds the ChromaDB vector database from PDFs
 │   └── Miele-PFD-401-MasterLine-Bedienungsanleitung.pdf  # Example appliance manual
+├── scripts/
+│   └── check_env.py                             # Validates required Azure OpenAI env vars
 ├── webpage/
 │   ├── index.html                               # Chat UI (single-page app)
 │   ├── script.js                                # Chat logic, STT, TTS
 │   └── styles.css                               # Light/dark theme styles
 ├── requesthandler.py                            # FastAPI backend (POST /api/chat)
+├── requirements.txt                             # Python dependencies
 └── README.md
 ```
 
@@ -95,8 +100,18 @@ Provides the HTTP API consumed by the frontend.
 | **Endpoint** | `POST /api/chat` |
 | **Request body** | `{ "message": "<user question>", "sessionId": "<session id>" }` |
 | **Response body** | `{ "answer": "<bot answer>" }` |
-| **Current behaviour** | Demo stub – echoes the user's message back as `"Demo-Antwort für: <message>"` |
-| **Planned behaviour** | Replace the stub with a call to the RAG pipeline (`rag_core.RAG`) and an Azure OpenAI LLM to return a real document-grounded answer |
+| **LLM** | [Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/) chat completions API (`api_version: 2024-02-01`) |
+| **Token limit** | `MAX_TOKENS = 50` per response (adjustable at the top of the file) |
+| **Startup** | The `AzureOpenAI` client is initialised at startup if all three environment variables are present; otherwise the server starts but returns `503` on every `/api/chat` request until the variables are set |
+| **Planned enhancement** | Wire in ChromaDB similarity search to retrieve relevant document chunks and include them as context in the Azure OpenAI prompt |
+
+Required environment variables (see [Step 1](#step-1--configure-environment-variables)):
+
+| Variable | Description |
+|----------|-------------|
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI resource endpoint URL |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key |
+| `AZURE_OPENAI_DEPLOYMENT` | Azure deployment / model name |
 
 Interactive API docs are available at `http://localhost:8000/docs` once the server is running.
 
@@ -120,12 +135,27 @@ A self-contained single-page chat application that requires no build step.
 
 ---
 
+### scripts/check_env.py – Environment Checker
+
+**File:** `scripts/check_env.py`
+
+A small helper that verifies the three required Azure OpenAI environment variables are set and are not placeholder values (strings starting with `YOUR_`).
+
+```bash
+python scripts/check_env.py
+```
+
+If a `.env` file is present in the repository root (and `python-dotenv` is installed), the script loads it automatically before checking. If no `.env` exists it falls back to `.env.example`. The script exits with code `0` when all variables are filled, or `2` when any are missing or still placeholder values, printing clear next-step instructions.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
 
 - **Python 3.10+**
 - **pip** (or a virtual-environment manager such as `venv` or `conda`)
+- An **Azure OpenAI** resource with a deployed chat model (e.g. `gpt-4o-mini`)
 - A modern browser with Web Speech API support (Chrome, Edge, or Safari) for voice features
 
 ### Installation
@@ -140,12 +170,43 @@ python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 # 3. Install Python dependencies
-pip install fastapi uvicorn pypdf sentence-transformers chromadb
+pip install -r requirements.txt
+
+# Optional: install python-dotenv to load a local .env file
+pip install python-dotenv
 ```
 
 ---
 
-### Step 1 – Build the Vector Database
+### Step 1 – Configure Environment Variables
+
+The backend requires three Azure OpenAI credentials. The easiest way to supply them locally is via a `.env` file in the repository root:
+
+```bash
+# .env  (do NOT commit this file – it is already in .gitignore)
+AZURE_OPENAI_ENDPOINT=https://<your-resource-name>.openai.azure.com
+AZURE_OPENAI_API_KEY=<your-api-key>
+AZURE_OPENAI_DEPLOYMENT=<your-deployment-name>
+```
+
+Verify your configuration before starting the server:
+
+```bash
+python scripts/check_env.py
+```
+
+Expected output when everything is configured correctly:
+
+```
+Loaded environment from: .env
+All required environment variables are present and look filled.
+```
+
+Alternatively, export the variables in your shell before running `uvicorn`.
+
+---
+
+### Step 2 – Build the Vector Database
 
 Run this once (or whenever you add new PDFs) to populate the ChromaDB database.
 
@@ -175,7 +236,7 @@ The database is saved to `./chroma_db/` in the current directory.
 
 ---
 
-### Step 2 – Start the Backend API
+### Step 3 – Start the Backend API
 
 ```bash
 # From the repository root
@@ -187,7 +248,7 @@ Open `http://localhost:8000/docs` in your browser to explore the interactive Swa
 
 ---
 
-### Step 3 – Open the Frontend
+### Step 4 – Open the Frontend
 
 Open `webpage/index.html` directly in your browser:
 
@@ -219,10 +280,14 @@ You should now see the chat interface. Type a question and click **Send** (or pr
 
 | File | Setting | Description |
 |------|---------|-------------|
+| `.env` | `AZURE_OPENAI_ENDPOINT` | Azure OpenAI resource endpoint URL (required) |
+| `.env` | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key (required) |
+| `.env` | `AZURE_OPENAI_DEPLOYMENT` | Azure deployment / model name (required) |
 | `DB/build_db.py` | `PDF_PATH` | Path to the PDF manual to index |
 | `DB/build_db.py` | `CHUNK_SIZE` / `CHUNK_OVERLAP` | Controls granularity of text chunks |
 | `DB/build_db.py` | `COLLECTION_NAME` | ChromaDB collection to write to |
 | `DB/build_db.py` | `EMBEDDING_MODEL` | Sentence-transformer model name |
+| `requesthandler.py` | `MAX_TOKENS` | Maximum tokens per Azure OpenAI response (default: `50`) |
 | `requesthandler.py` | `allow_origins` | Restrict CORS origins before deploying to production |
 | `webpage/script.js` | `API_URL` | Backend URL (default: `http://localhost:8000/api/chat`) |
 | `webpage/script.js` | `SESSION_ID` | Session identifier sent with every request |
