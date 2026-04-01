@@ -3,8 +3,20 @@
 // data-theme attribute on <html>.
 // ============================================================
 document.getElementById('theme-toggle').onclick = () => {
-    document.documentElement.dataset.theme =
-        document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    document.documentElement.dataset.theme = isDark ? 'light' : 'dark';
+    document.getElementById('theme-toggle').textContent = isDark ? '🌙' : '☀️';
+};
+
+// ============================================================
+// TTS toggle – enables / disables text-to-speech (off by default)
+// ============================================================
+let ttsEnabled = false;
+
+document.getElementById('tts-toggle').onclick = () => {
+    ttsEnabled = !ttsEnabled;
+    document.getElementById('tts-toggle').textContent = ttsEnabled ? '🔊' : '🔇';
+    if (!ttsEnabled) speechSynthesis.cancel();
 };
 
 
@@ -93,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} text - Plain text to speak.
      */
     function speak(text) {
+        if (!ttsEnabled) return;
         if (!('speechSynthesis' in window)) return;
 
         speechSynthesis.cancel(); // stop any ongoing utterance
