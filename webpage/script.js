@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Backend API
     // ============================================================
 
-    const API_URL   = '/api/chat';
+    const API_URL   = 'http://localhost:8000/api/chat';
     const SESSION_ID = 'demo-session-1';
 
     /**
@@ -209,6 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: value, sessionId: SESSION_ID })
             });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             const data   = await response.json();
             const answer = data.answer || 'Keine Antwort vom LLM erhalten.';
