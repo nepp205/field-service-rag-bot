@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,8 +12,11 @@
     <h1>Welcome to the Field Service RAG Bot</h1>
     <p>This is a simple web interface for interacting with the RAG bot.</p>
 
-    <!-- Light/dark theme toggle button (top of page) -->
-    <button id="theme-toggle">🌙</button>
+    <!-- Light/dark theme toggle + TTS toggle buttons (top of page) -->
+    <div class="controls">
+        <button id="tts-toggle" title="Text-to-Speech">🔇</button>
+        <button id="theme-toggle" title="Dark/Light Mode">☀️</button>
+    </div>
 
     <!-- Main chat shell -->
     <div id="chat-container">
