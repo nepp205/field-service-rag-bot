@@ -1,3 +1,8 @@
+# Ignore local environment file containing secrets
+.env
+
+# Python cache
+__pycache__/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

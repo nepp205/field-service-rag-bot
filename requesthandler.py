@@ -14,21 +14,19 @@ Usage:
 """
 
 import os
+import logging
 
 from fastapi import FastAPI, HTTPException
 from openai import AzureOpenAI, OpenAIError
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
-_MISSING = [
-    v for v in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT")
-    if not os.environ.get(v)
-]
-if _MISSING:
-    raise RuntimeError(
-        f"Missing required environment variable(s): {', '.join(_MISSING)}. "
-        "Set them via repository secrets or export them in the shell before starting the server."
-    )
+# Optional: load a local .env when developing locally (install python-dotenv)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 MAX_TOKENS = 50
 
@@ -58,11 +56,29 @@ class ChatResponse(BaseModel):
     answer: str
 
 
-_azure_client = AzureOpenAI(
-    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-    api_key=os.environ["AZURE_OPENAI_API_KEY"],
-    api_version="2024-02-01",
-)
+# remove the eager import-time check and client creation; create client on startup
+_azure_client = None
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize AzureOpenAI client if env vars are present; otherwise warn."""
+    missing = [
+        v for v in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT")
+        if not os.environ.get(v)
+    ]
+    if missing:
+        logging.warning(
+            "Missing required environment variable(s): %s. Server will start but /api/chat will return 503 until set.",
+            ", ".join(missing),
+        )
+    else:
+        global _azure_client
+        _azure_client = AzureOpenAI(
+            azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+            api_key=os.environ["AZURE_OPENAI_API_KEY"],
+            api_version="2024-02-01",
+        )
+        logging.info("Azure OpenAI client initialized.")
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -76,6 +92,11 @@ async def chat(req: ChatRequest) -> ChatResponse:
     Returns:
         A ``ChatResponse`` with the generated answer string.
     """
+    if _azure_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Azure OpenAI client not configured. Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY and AZURE_OPENAI_DEPLOYMENT.",
+        )
     try:
         completion = _azure_client.chat.completions.create(
             model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
