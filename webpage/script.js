@@ -210,6 +210,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ message: value, sessionId: SESSION_ID })
             });
 
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
             const data   = await response.json();
             const answer = data.answer || 'Keine Antwort vom LLM erhalten.';
 
