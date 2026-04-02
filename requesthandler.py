@@ -32,7 +32,7 @@ try:
 except Exception:
     pass
 
-MAX_TOKENS = 512
+MAX_TOKENS = 51
 
 # ---------------------------------------------------------------------------
 # System prompt – loaded once at module import time from system_prompt.txt.
