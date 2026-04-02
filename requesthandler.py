@@ -19,6 +19,7 @@ Usage:
 import os
 import logging
 from pathlib import Path
+import json
 
 from fastapi import FastAPI, HTTPException
 from openai import AzureOpenAI, OpenAIError
@@ -168,6 +169,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
     history = _sessions[req.sessionId]
     history.append({"role": "user", "content": req.message})
 
+    
+
     try:
         completion = _azure_client.chat.completions.create(
             model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
@@ -181,3 +184,4 @@ async def chat(req: ChatRequest) -> ChatResponse:
         # Remove the user message that failed so the history stays consistent
         history.pop()
         raise HTTPException(status_code=502, detail="Azure OpenAI request failed.") from exc
+
