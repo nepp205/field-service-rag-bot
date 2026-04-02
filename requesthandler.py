@@ -166,33 +166,28 @@ async def startup_event():
 
 
 def optimize_prompt(raw: str) -> str:
-    """Rewrite *raw* using the lightweight rewrite model.
-
-    Corrects spelling and grammar, expands vague phrasing into a precise
-    technical question, and preserves all technical identifiers verbatim.
-    Falls back to the original message if the rewrite client is not configured
-    or if the API call fails for any reason.
-
-    Args:
-        raw: The original user message as received from the front-end.
-
-    Returns:
-        The optimised message, or *raw* unchanged on any error.
-    """
     if _rewrite_client is None:
         return raw
 
     try:
+        messages = [
+            {"role": "system", "content": _REWRITE_SYSTEM_INSTRUCTION},
+            {"role": "user", "content": raw},
+        ]
+        # Debug-log the payload sent to the rewrite model
+        logging.debug("Rewrite model request | endpoint=%s deployment=%s\n%s",
+                      os.environ.get("AZURE_REWRITE_ENDPOINT"),
+                      os.environ.get("AZURE_REWRITE_DEPLOYMENT"),
+                      json.dumps(messages, ensure_ascii=False, indent=2))
+
         result = _rewrite_client.chat.completions.create(
             model=os.environ["AZURE_REWRITE_DEPLOYMENT"],
-            messages=[
-                {"role": "system", "content": _REWRITE_SYSTEM_INSTRUCTION},
-                {"role": "user", "content": raw},
-            ],
+            messages=messages,
             max_tokens=REWRITE_MAX_TOKENS,
             temperature=0.0,
         )
         optimized = (result.choices[0].message.content or "").strip()
+        logging.debug("Rewrite model response: %r", optimized)
         if not optimized:
             logging.warning("Rewrite model returned empty response – using original message.")
             return raw
@@ -254,6 +249,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
     optimized_message = optimize_prompt(req.message)
     history.append({"role": "user", "content": optimized_message})
 
+    # Log full history that will be sent to main model
+    logging.debug("LLM request messages (full history):\n%s", json.dumps(history, ensure_ascii=False, indent=2))
+
     try:
         completion = _azure_client.chat.completions.create(
             model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
@@ -267,4 +265,10 @@ async def chat(req: ChatRequest) -> ChatResponse:
         # Remove the user message that failed so the history stays consistent
         history.pop()
         raise HTTPException(status_code=502, detail="Azure OpenAI request failed.") from exc
+
+# ensure debug logs go to the terminal
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# also set uvicorn loggers to DEBUG so their output is visible
+for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+    logging.getLogger(name).setLevel(logging.DEBUG)
 
