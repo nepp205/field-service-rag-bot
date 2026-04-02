@@ -8,9 +8,17 @@ Exposes two POST endpoints:
   Full conversation history is maintained per session.
 
 Required environment variables (supplied via repository secrets):
-    AZURE_OPENAI_ENDPOINT   – Azure OpenAI resource endpoint URL
-    AZURE_OPENAI_API_KEY    – Azure OpenAI API key
-    AZURE_OPENAI_DEPLOYMENT – Azure deployment name (model)
+    AZURE_OPENAI_ENDPOINT      – Azure OpenAI resource endpoint URL
+    AZURE_OPENAI_API_KEY       – Azure OpenAI API key
+    AZURE_OPENAI_DEPLOYMENT    – Azure deployment name (main model)
+
+Optional environment variables for prompt optimisation (pre-flight rewrite):
+    AZURE_REWRITE_ENDPOINT     – Endpoint of the lightweight rewrite model deployment
+    AZURE_REWRITE_API_KEY      – API key for the rewrite deployment
+    AZURE_REWRITE_DEPLOYMENT   – Deployment name of the lightweight rewrite model
+                                  (recommended: gpt-4o-mini)
+    If any of these three are absent the optimisation step is silently skipped
+    and the raw user message is sent to the main model unchanged.
 
 Usage:
     uvicorn requesthandler:app --reload
@@ -34,6 +42,25 @@ except Exception:
     pass
 
 MAX_TOKENS = 51
+REWRITE_MAX_TOKENS = 150
+
+# ---------------------------------------------------------------------------
+# Rewrite / prompt-optimisation system instruction.
+# Used by the lightweight pre-flight model to clean up user messages before
+# they are forwarded to the main RAG model.
+# ---------------------------------------------------------------------------
+_REWRITE_SYSTEM_INSTRUCTION = (
+    "You are a prompt-optimisation assistant for a Miele field-service chatbot. "
+    "Your only job is to rewrite the technician's message so it is grammatically "
+    "correct, clearly phrased, and well-suited for a technical documentation search. "
+    "Rules:\n"
+    "1. Fix all spelling and grammar mistakes.\n"
+    "2. Rephrase fragments or vague notes as a precise, answerable question.\n"
+    "3. Preserve all technical terms, model numbers, error codes, and part names "
+    "exactly as written (e.g. F67, W1, PCB, NTC, G7310).\n"
+    "4. Do NOT answer the question – return only the improved prompt.\n"
+    "5. Return only the rewritten message, no explanations or meta-commentary."
+)
 
 # ---------------------------------------------------------------------------
 # System prompt – loaded once at module import time from system_prompt.txt.
@@ -96,10 +123,14 @@ class SessionInitResponse(BaseModel):
 
 # remove the eager import-time check and client creation; create client on startup
 _azure_client = None
+_rewrite_client = None
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize AzureOpenAI client if env vars are present; otherwise warn."""
+    """Initialize AzureOpenAI clients if env vars are present; otherwise warn."""
+    global _azure_client, _rewrite_client
+
+    # --- Main model client ---
     missing = [
         v for v in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT")
         if not os.environ.get(v)
@@ -110,13 +141,66 @@ async def startup_event():
             ", ".join(missing),
         )
     else:
-        global _azure_client
         _azure_client = AzureOpenAI(
             azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
             api_key=os.environ["AZURE_OPENAI_API_KEY"],
             api_version="2024-02-01",
         )
         logging.info("Azure OpenAI client initialized.")
+
+    # --- Rewrite model client (optional) ---
+    rewrite_vars = ("AZURE_REWRITE_ENDPOINT", "AZURE_REWRITE_API_KEY", "AZURE_REWRITE_DEPLOYMENT")
+    missing_rewrite = [v for v in rewrite_vars if not os.environ.get(v)]
+    if missing_rewrite:
+        logging.warning(
+            "Prompt optimisation disabled – missing rewrite env var(s): %s.",
+            ", ".join(missing_rewrite),
+        )
+    else:
+        _rewrite_client = AzureOpenAI(
+            azure_endpoint=os.environ["AZURE_REWRITE_ENDPOINT"],
+            api_key=os.environ["AZURE_REWRITE_API_KEY"],
+            api_version="2024-02-01",
+        )
+        logging.info("Azure OpenAI rewrite client initialized (deployment: %s).", os.environ["AZURE_REWRITE_DEPLOYMENT"])
+
+
+def optimize_prompt(raw: str) -> str:
+    """Rewrite *raw* using the lightweight rewrite model.
+
+    Corrects spelling and grammar, expands vague phrasing into a precise
+    technical question, and preserves all technical identifiers verbatim.
+    Falls back to the original message if the rewrite client is not configured
+    or if the API call fails for any reason.
+
+    Args:
+        raw: The original user message as received from the front-end.
+
+    Returns:
+        The optimised message, or *raw* unchanged on any error.
+    """
+    if _rewrite_client is None:
+        return raw
+
+    try:
+        result = _rewrite_client.chat.completions.create(
+            model=os.environ["AZURE_REWRITE_DEPLOYMENT"],
+            messages=[
+                {"role": "system", "content": _REWRITE_SYSTEM_INSTRUCTION},
+                {"role": "user", "content": raw},
+            ],
+            max_tokens=REWRITE_MAX_TOKENS,
+            temperature=0.0,
+        )
+        optimized = (result.choices[0].message.content or "").strip()
+        if not optimized:
+            logging.warning("Rewrite model returned empty response – using original message.")
+            return raw
+        logging.info("Prompt optimised | original=%r | optimised=%r", raw, optimized)
+        return optimized
+    except OpenAIError as exc:
+        logging.warning("Prompt optimisation failed (%s) – using original message.", exc)
+        return raw
 
 
 @app.post("/api/session/init", response_model=SessionInitResponse)
@@ -167,9 +251,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
         _sessions[req.sessionId] = [{"role": "system", "content": _SYSTEM_PROMPT}]
 
     history = _sessions[req.sessionId]
-    history.append({"role": "user", "content": req.message})
-
-    
+    optimized_message = optimize_prompt(req.message)
+    history.append({"role": "user", "content": optimized_message})
 
     try:
         completion = _azure_client.chat.completions.create(
