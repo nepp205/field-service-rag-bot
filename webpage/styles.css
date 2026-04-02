@@ -373,15 +373,15 @@ p {
    -------------------------------------------------------------------------- */
 #scroll-down-btn {
     position: fixed;
-    bottom: 150px;        /* ← 12px über ChatBox‑Unterkante */
+    bottom: 210px;        /* ← 12px über ChatBox‑Unterkante */
     left: 50%;
     transform: translateX(-50%);  /* ← Horizontal exakt mittig */
     width: 36px;
     height: 36px;
     border: none;
     border-radius: 50%;
-    background: rgba(37, 99, 235, 0.9);
-    color: white;
+    background: rgba(255, 255, 255, 0.9);
+    color: rgb(58, 79, 174);
     font-size: 16px;
     cursor: pointer;
     opacity: 0;
@@ -399,4 +399,5 @@ p {
 #scroll-down-btn:hover {
     background: #2563eb;
     transform: translateX(-50%) scale(1.05);
+    color: #ffffff;
 }
