@@ -193,8 +193,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // Backend API
     // ============================================================
 
-    const API_URL   = 'http://localhost:8000/api/chat';
-    const SESSION_ID = 'demo-session-1';
+    const API_BASE  = 'http://localhost:8000';
+    const API_URL   = `${API_BASE}/api/chat`;
+
+    // Generate a unique session ID for this page load.
+    const SESSION_ID = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    console.log('[Session] ID:', SESSION_ID);
+
+    // Disable input until the session is ready
+    if (sendBtn)   sendBtn.disabled = true;
+    if (userInput) userInput.disabled = true;
+    if (micBtn)    micBtn.disabled = true;
+
+    // Silently initialise the session on the backend (no UI feedback)
+    fetch(`${API_BASE}/api/session/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: SESSION_ID })
+    })
+    .then(() => {
+        console.log('[Session] Initialised successfully:', SESSION_ID);
+        if (sendBtn)   sendBtn.disabled = false;
+        if (userInput) userInput.disabled = false;
+        if (micBtn)    micBtn.disabled = false;
+    })
+    .catch((err) => {
+        console.error('[Session] Init failed:', err);
+        // Still enable input so the user can try (fallback session created on first chat)
+        if (sendBtn)   sendBtn.disabled = false;
+        if (userInput) userInput.disabled = false;
+        if (micBtn)    micBtn.disabled = false;
+    });
 
     /**
      * Send the current input value to the backend and display the answer.
