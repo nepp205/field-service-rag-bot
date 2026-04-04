@@ -32,13 +32,14 @@ def get_Context():
     if token != SECRET_TOKEN:
         return jsonify({'error': 'Invalid token'}), 401
     
-    # Query aus Request-Body auslesen
+    # Query und Model aus Request-Body auslesen
     data = request.get_json()
     if not data or 'query' not in data:
         return jsonify({'error': 'Missing query parameter'}), 400
     
     query = data['query']
+    model = data.get('model', None)  # Optional: Model-Filter
     
     # Context abrufen
-    context = cH.retrieve_context(query)
+    context = cH.retrieve_context(query=query, model=model)
     return jsonify({'context': context})

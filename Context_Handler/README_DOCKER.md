@@ -54,9 +54,17 @@ Der Webserver läuft erreichbar unter:
 - **Health Check**: `GET http://localhost:5000/health`
 - **API Endpoint**: `POST http://localhost:5000/context`
 
+#### API Parameter:
+```json
+{
+  "query": "string (erforderlich) - Die Suchfrage",
+  "model": "string (optional) - Modellname zum Filtern der PDFs. Nur PDFs mit diesem Namen in der Dateibezeichnung werden durchsucht"
+}
+```
+
 ### 3. **Context via API abrufen**
 
-#### Request:
+#### Request (ohne Model-Filter):
 ```bash
 curl -X POST http://localhost:5000/context \
   -H "Authorization: Bearer Placeholder" \
@@ -64,10 +72,18 @@ curl -X POST http://localhost:5000/context \
   -d '{"query": "Wie wechsle ich die Heizung in meiner Siemens Waschmaschine?"}'
 ```
 
+#### Request (mit Model-Filter):
+```bash
+curl -X POST http://localhost:5000/context \
+  -H "Authorization: Bearer Placeholder" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Wie wechsle ich die Heizung?", "model": "W1"}'
+```
+
 #### Response:
 ```json
 {
-  "context": "Quelle: siemens-waschmaschine.pdf\n...\n\n---\n\n..."
+  "context": "Quelle: siemens-waschmaschine-W1.pdf\n...\n\n---\n\n..."
 }
 ```
 
@@ -87,7 +103,8 @@ headers = {
 }
 
 data = {
-    "query": "Welche Fehler können auftreten?"
+    "query": "Welche Fehler können auftreten?",
+    "model": "W1"  # Optional: Filtern nach Modellname
 }
 
 response = requests.post(url, headers=headers, json=data)
@@ -104,7 +121,10 @@ const response = await fetch("http://localhost:5000/context", {
     "Authorization": `Bearer ${token}`,
     "Content-Type": "application/json"
   },
-  body: JSON.stringify({ query: "Welche Fehler können auftreten?" })
+  body: JSON.stringify({ 
+    query: "Welche Fehler können auftreten?",
+    model: "W1"  // Optional: Filtern nach Modellname
+  })
 });
 
 const data = await response.json();

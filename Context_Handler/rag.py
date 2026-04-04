@@ -40,9 +40,28 @@ retriever = VectorIndexRetriever(
     similarity_cutoff=0.6
 )
 
-def get_context(query: str) -> str:
-    """Retrieves raw context nodes from Qdrant"""
+def get_context(query: str, model: str = None) -> str:
+    """Retrieves raw context nodes from Qdrant
+    
+    Args:
+        query (str): The search query
+        model (str, optional): The model name to filter PDFs. Only PDFs containing this model name will be searched.
+    
+    Returns:
+        str: The retrieved context from matching documents
+    """
     nodes = retriever.retrieve(query)   # oder retriever.retrieve(QueryBundle(query))
+    
+    # Filter by model name if provided
+    if model:
+        model_lower = model.lower()
+        filtered_nodes = [
+            node for node in nodes 
+            if model_lower in node.node.metadata.get('file_name', '').lower()
+        ]
+        # If no nodes match the model filter, return empty result
+        if filtered_nodes:
+            nodes = filtered_nodes
     
     context = "\n\n---\n\n".join(
         f"Quelle: {node.node.metadata.get('file_name', 'unbekannt')} "
@@ -57,7 +76,8 @@ def get_context(query: str) -> str:
 # Test
 if __name__ == "__main__":
     frage = "Wie sollte ich meine Waschmaschine am besten hinstellen?"
+    modell = "W1"  # Optional: Filtern nach Modellname
     
-    context = get_context(frage)
+    context = get_context(frage, model=modell)
 
     print(context)
