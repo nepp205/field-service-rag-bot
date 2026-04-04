@@ -16,6 +16,8 @@ services:
       # Qdrant Vector Database Environment Variables
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - HF_TOKEN=${HF_TOKEN}
+      - WEBSERVER_TOKEN=${WEBSERVER_TOKEN}
     restart: unless-stopped
     networks:
       - rag-network

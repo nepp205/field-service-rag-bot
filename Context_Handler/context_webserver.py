@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify
 import Context_Handler as cH
+from dotenv import load_dotenv
+import os
+
 
 webserver = Flask(__name__)
 
-SECRET_TOKEN = "z6875426jgbk0d9fut6t3427fgd32fgdfhsijugfgdgfksdhbghbhw5ziuogtzufbdvhjghrw78tg782r4gdhjcg"
+SECRET_TOKEN = os.getenv("WEBSERVER_TOKEN")
 
 
 @webserver.route('/health', methods=['GET'])

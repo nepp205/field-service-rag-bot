@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 from huggingface_hub import login
 
-login(token="hf_...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")
+login(token=os.getenv("HF_TOKEN"))
 
 load_dotenv()
 
