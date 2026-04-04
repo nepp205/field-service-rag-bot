@@ -21,7 +21,14 @@ cp .env.example .env
 
 Die folgenden Variablen werden benötigt:
  - `QDRANT_URL` - URL zur Qdrant Vector Database   <!--https://512bf099-ef76-4b8d-bbb0-81c64346546e.eu-central-1-0.aws.cloud.qdrant.io-->
-- `QDRANT_API_KEY` - API Key für Qdrant
+ - `QDRANT_API_KEY` - API Key für Qdrant
+
+ - `HF_TOKEN=Placeholder`
+
+ - `FLASK_ENV=production`
+ - `FLASK_APP=context_webserver.py`
+
+ - `Webserver_Token=Placeholder`
 
 ---
 
