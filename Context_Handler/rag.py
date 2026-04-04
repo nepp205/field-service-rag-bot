@@ -45,7 +45,8 @@ def get_context(query: str) -> str:
     nodes = retriever.retrieve(query)   # oder retriever.retrieve(QueryBundle(query))
     
     context = "\n\n---\n\n".join(
-        f"Quelle: {node.node.metadata.get('file_name', 'unbekannt')}\n"
+        f"Quelle: {node.node.metadata.get('file_name', 'unbekannt')} "
+        f"(Seite {node.node.metadata.get('page_label', 'unbekannt')})\n"
         f"{node.node.get_content()}"
         for node in nodes
     )
@@ -55,7 +56,7 @@ def get_context(query: str) -> str:
 
 # Test
 if __name__ == "__main__":
-    frage = "Sieb Reinigen?"
+    frage = "Wie sollte ich meine Waschmaschine am besten hinstellen?"
     
     context = get_context(frage)
 
