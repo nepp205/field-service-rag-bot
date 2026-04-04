@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  rag-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-bot-app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./pdfs:/app/pdfs
+    environment:
+      - FLASK_APP=context_webserver.py
+      - FLASK_ENV=production
+      # Qdrant Vector Database Environment Variables
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - HF_TOKEN=${HF_TOKEN}
+      - WEBSERVER_TOKEN=${WEBSERVER_TOKEN}
+    restart: unless-stopped
+    networks:
+      - rag-network
+    # Memory und CPU Limits
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+networks:
+  rag-network:
+    driver: bridge

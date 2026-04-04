@@ -1,0 +1,25 @@
+Flask>=3.0.0
+
+# LlamaIndex - Flexiblere Versionen
+llama-index>=0.10.0
+llama-index-embeddings-huggingface>=0.2.0
+# Hier die Fixierung auf 0.2.0 entfernen:
+llama-index-vector-stores-qdrant>=0.1.0
+
+# Vector Database
+qdrant-client>=1.9.0
+
+# Embeddings
+sentence-transformers>=2.6.1
+huggingface-hub>=0.19.0
+
+# PDF Processing
+pypdf>=4.0.1
+
+# Utilities
+python-dotenv==1.0.0
+tqdm>=4.66.1
+
+# Core
+numpy>=1.24.0,<2.0
+pydantic>=2.0
