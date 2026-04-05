@@ -2,6 +2,7 @@ from llama_index.core import VectorStoreIndex
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core.retrievers import VectorIndexRetriever
+# from llama_index.core.filters import MetadataFilters, ExactMatchFilter
 from qdrant_client import QdrantClient
 from dotenv import load_dotenv
 import os
@@ -33,7 +34,6 @@ index = VectorStoreIndex.from_vector_store(
     embed_model=embed_model
 )
 
-# Retriever (einfach und direkt)
 retriever = VectorIndexRetriever(
     index=index,
     similarity_top_k=15,
@@ -52,7 +52,7 @@ def get_context(query: str, model: str = None) -> str:
     """
     nodes = retriever.retrieve(query)   # oder retriever.retrieve(QueryBundle(query))
     
-    # Filter by model name if provided
+    # Filter by model name if provided after retrieval
     if model:
         model_lower = model.lower()
         filtered_nodes = [
@@ -62,7 +62,21 @@ def get_context(query: str, model: str = None) -> str:
         # If no nodes match the model filter, return empty result
         if filtered_nodes:
             nodes = filtered_nodes
+
+    # Filter by modelname if provided before retrieval
+    # if model:
+    #     # Filter by model metadata
+    #     filters = MetadataFilters(
+    #         filters=[ExactMatchFilter(key="model", value=model.lower())]
+    #     )
+    #     retriever.filters = filters
+    # else:
+    #     retriever.filters = None
     
+    # nodes = retriever.retrieve(query)
+    
+
+
     context = "\n\n---\n\n".join(
         f"Quelle: {node.node.metadata.get('file_name', 'unbekannt')} "
         f"(Seite {node.node.metadata.get('page_label', 'unbekannt')})\n"
@@ -75,8 +89,9 @@ def get_context(query: str, model: str = None) -> str:
 
 # Test
 if __name__ == "__main__":
-    frage = "Wie sollte ich meine Waschmaschine am besten hinstellen?"
-    modell = "W1"  # Optional: Filtern nach Modellname
+    # frage = "Wie sollte ich meine Waschmaschine am besten hinstellen?"
+    frage = "Meine Waschmaschine zeigt den Fehler F-404 an was soll ich tun?"
+    modell = "Miele-PFD-401-Masterline"  # Optional: Filtern nach Modellname
     
     context = get_context(frage, model=modell)
 
