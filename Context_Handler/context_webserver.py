@@ -8,13 +8,6 @@ webserver = Flask(__name__)
 
 SECRET_TOKEN = os.getenv("WEBSERVER_TOKEN")
 
-
-@webserver.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint für Docker"""
-    return jsonify({'status': 'healthy'}), 200
-
-
 @webserver.route('/context', methods=['POST'])
 def get_Context():
     # Authorization Header prüfen
