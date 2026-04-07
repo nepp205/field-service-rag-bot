@@ -40,6 +40,9 @@ Die folgenden Variablen werden benötigt:
 ### 1. **Mit Docker Compose (Empfohlen)**
 
 ```bash
+# Image bauen
+docker-compose build --no-cache
+
 # Container starten
 docker-compose up -d
 
