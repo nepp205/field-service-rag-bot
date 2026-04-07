@@ -20,6 +20,12 @@ Optional environment variables for prompt optimisation (pre-flight rewrite):
     If any of these three are absent the optimisation step is silently skipped
     and the raw user message is sent to the main model unchanged.
 
+    TODO:
+    Uvicorn rausschmeißen
+    Env anlegen checken
+    Docker architektur schreiben
+
+
 Usage:
     uvicorn requesthandler:app --reload
 """
