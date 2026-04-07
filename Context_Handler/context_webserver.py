@@ -43,3 +43,26 @@ def get_Context():
     # Context abrufen
     context = cH.retrieve_context(query=query, model=model)
     return jsonify({'context': context})
+
+
+
+######################## Test ###################################
+if __name__ == "__main__":
+    import requests
+    import json
+
+    url = "http://localhost:5000/context"
+    token = SECRET_TOKEN
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "query": "Mein Geschirrspüler zeigt den Fehler F-404 an was soll ich tun?",
+        "model": "pfd 401"  # Optional: Filtern nach Modellname
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    print(json.dumps(response.json(), indent=2))
