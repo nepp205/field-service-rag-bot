@@ -8,8 +8,6 @@ Start modes:
 
 import logging
 import sys
-from contextlib import asynccontextmanager
-
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,32 +15,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from api import router
 from llm import init_clients
 
-# ---------------------------------------------------------------------------
-# Logging – stdout-friendly, visible in terminal and container logs.
-# ---------------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    stream=sys.stdout,
-)
-for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-    logging.getLogger(_name).setLevel(logging.DEBUG)
+# setup logging to stdout
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", stream=sys.stdout)
 
-# ---------------------------------------------------------------------------
-# Lifespan – initialise Azure OpenAI clients on startup.
-# ---------------------------------------------------------------------------
+# startup: initialise Azure OpenAI client once
+app = FastAPI(title="Field-Service RAG Bot API")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+# call init_clients() when the server starts
+@app.on_event("startup")
+def on_startup():
     init_clients()
-    yield
-
-
-# ---------------------------------------------------------------------------
-# FastAPI application
-# ---------------------------------------------------------------------------
-app = FastAPI(title="Field-Service RAG Bot API", lifespan=lifespan)
 
 # Allow all origins for the demo phase.
 # Restrict `allow_origins` to the actual front-end URL in production.
@@ -57,8 +40,6 @@ app.add_middleware(
 app.include_router(router)
 
 
-# ---------------------------------------------------------------------------
-# Dev server entry-point (F5 / python server.py)
-# ---------------------------------------------------------------------------
+# dev: run with `python server.py` (reload for development)
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
