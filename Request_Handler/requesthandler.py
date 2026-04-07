@@ -22,7 +22,7 @@ Optional environment variables for prompt optimisation (pre-flight rewrite):
 
     TODO:
     Uvicorn rausschmeißen
-    Env anlegen checken
+  
     Docker architektur schreiben
 
 
@@ -37,7 +37,7 @@ import json
 import httpx
 from typing import Optional
 
-import Context_Handler 
+
 
 from fastapi import FastAPI, HTTPException
 from openai import AzureOpenAI, OpenAIError
