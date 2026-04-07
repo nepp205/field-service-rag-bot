@@ -8,7 +8,7 @@ import os
 import logging
 import httpx
 from typing import Optional
-from openai import AzureOpenAI, OpenAIError
+from openai import AsyncAzureOpenAI
 
 # Load .env when present (development convenience)
 try:
@@ -18,21 +18,19 @@ try:
 except Exception:
     pass
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
-
 # Simple configuration constants
 MAX_TOKENS = 100
 CONTEXT_HANDLER_URL = os.getenv("CONTEXT_HANDLER_URL", "http://localhost:5000/context")
 CONTEXT_HANDLER_TOKEN = os.getenv("CONTEXT_HANDLER_TOKEN")
 
 # Internal client holder
-_azure_client: Optional[AzureOpenAI] = None
+_azure_client: Optional[AsyncAzureOpenAI] = None
 
 
 # Initialize the Azure OpenAI clients
 
 def init_clients() -> None:
-   # Initialize the Azure OpenAI client
+    # Initialize the Azure OpenAI client
     global _azure_client
     #env variables
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -40,7 +38,7 @@ def init_clients() -> None:
     api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
 
     try:
-        _azure_client = AzureOpenAI(azure_endpoint=endpoint, api_key=api_key, api_version=api_version)
+        _azure_client = AsyncAzureOpenAI(azure_endpoint=endpoint, api_key=api_key, api_version=api_version)
         logging.info("Azure OpenAI client initialized (endpoint=%s, api_version=%s)", endpoint, api_version)
     except Exception as exc:
         logging.exception("Failed to initialize Azure OpenAI client: %s", exc)
@@ -82,7 +80,7 @@ async def fetch_context(query: str, timeout: float = 3.0) -> Optional[str]:
         return None
 
 
-def get_azure_client() -> Optional[AzureOpenAI]:
+def get_azure_client() -> Optional[AsyncAzureOpenAI]:
     """Callers should check for None and surface a 503/appropriate error if
     the client is not configured.
     """
