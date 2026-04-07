@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from openai import OpenAIError
 from pydantic import BaseModel
 import logging
+import json
 
 from llm import MAX_TOKENS, fetch_context, get_azure_client
 
@@ -46,14 +47,25 @@ async def session_init(req: SessionInitRequest):
 
 @router.post("/api/chat")
 async def chat(req: ChatRequest):
+    client = get_azure_client()
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+
+    if client is None or not deployment:
+        raise HTTPException(
+            status_code=503,
+            detail="Azure OpenAI client not configured. Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY and AZURE_OPENAI_DEPLOYMENT.",
+        )
+
+    # Ensure the session exists (fallback if /api/session/init was not called)
     if req.sessionId not in _sessions:
-        raise HTTPException(status_code=400, detail="Session not initialized")
+        logging.warning("Session %s not found – creating on-the-fly.", req.sessionId)
+        _sessions[req.sessionId] = [{"role": "system", "content": _SYSTEM_PROMPT}]
 
     history = _sessions[req.sessionId]
 
     # RAG-Kontext holen, falls verfuegbar
     try:
-        context_text = await fetch_context(req.message, timeout=3.0)
+        context_text = await fetch_context(req.message, model=req.model, timeout=3.0)
     except Exception:
         context_text = None
 
@@ -70,15 +82,8 @@ async def chat(req: ChatRequest):
 
     history.append({"role": "user", "content": req.message})
 
-    client = get_azure_client()
-    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-
-    if client is None or not deployment:
-        if history:
-            history.pop()
-        if len(history) > 1 and history[1].get("content", "").startswith("Retrieved context:"):
-            history.pop(1)
-        raise HTTPException(status_code=503, detail="Azure OpenAI client not initialized or deployment not configured")
+    # Log full history that will be sent to main model
+    logging.debug("LLM request messages (full history):\n%s", json.dumps(history, ensure_ascii=False, indent=2))
 
     try:
         response = await client.chat.completions.create(
