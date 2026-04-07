@@ -12,15 +12,7 @@ Required environment variables (supplied via repository secrets):
     AZURE_OPENAI_API_KEY       – Azure OpenAI API key
     AZURE_OPENAI_DEPLOYMENT    – Azure deployment name (main model)
 
-Optional environment variables for prompt optimisation (pre-flight rewrite):
-    AZURE_REWRITE_ENDPOINT     – Endpoint of the lightweight rewrite model deployment
-    AZURE_REWRITE_API_KEY      – API key for the rewrite deployment
-    AZURE_REWRITE_DEPLOYMENT   – Deployment name of the lightweight rewrite model
-                                  (recommended: gpt-4o-mini)
-    If any of these three are absent the optimisation step is silently skipped
-    and the raw user message is sent to the main model unchanged.
-
-    TODO:
+TODO:
     Uvicorn rausschmeißen
     Env anlegen checken
     Docker architektur schreiben
@@ -37,7 +29,7 @@ import json
 import httpx
 from typing import Optional
 
-import Context_Handler 
+
 
 from fastapi import FastAPI, HTTPException
 from openai import AzureOpenAI, OpenAIError
@@ -52,29 +44,15 @@ except Exception:
     pass
 
 MAX_TOKENS = 100
-REWRITE_MAX_TOKENS = 150
+
+
+
 
 # Context Handler config (optional). If not set, context lookup is skipped.
 CONTEXT_HANDLER_URL = "http://localhost:5000/context"
 CONTEXT_HANDLER_TOKEN = os.environ.get("CONTEXT_HANDLER_TOKEN")
 
-# ---------------------------------------------------------------------------
-# Rewrite / prompt-optimisation system instruction.
-# Used by the lightweight pre-flight model to clean up user messages before
-# they are forwarded to the main RAG model.
-# ---------------------------------------------------------------------------
-_REWRITE_SYSTEM_INSTRUCTION = (
-    "You are a prompt-optimisation assistant for a Miele field-service chatbot. "
-    "Your only job is to rewrite the technician's message so it is grammatically "
-    "correct, clearly phrased, and well-suited for a technical documentation search. "
-    "Rules:\n"
-    "1. Fix all spelling and grammar mistakes.\n"
-    "2. Rephrase fragments or vague notes as a precise, answerable question.\n"
-    "3. Preserve all technical terms, model numbers, error codes, and part names "
-    "exactly as written (e.g. F67, W1, PCB, NTC, G7310).\n"
-    "4. Do NOT answer the question – return only the improved prompt.\n"
-    "5. Return only the rewritten message, no explanations or meta-commentary."
-)
+# (No rewrite/prompt-optimisation assistant configured.)
 
 # ---------------------------------------------------------------------------
 # System prompt – loaded once at module import time from system_prompt.txt.
@@ -143,12 +121,12 @@ class SessionInitResponse(BaseModel):
 
 # remove the eager import-time check and client creation; create client on startup
 _azure_client = None
-_rewrite_client = None
+# no rewrite client used
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize AzureOpenAI clients if env vars are present; otherwise warn."""
-    global _azure_client, _rewrite_client
+    global _azure_client
 
     # --- Main model client ---
     missing = [
@@ -168,54 +146,10 @@ async def startup_event():
         )
         logging.info("Azure OpenAI client initialized.")
 
-    # --- Rewrite model client (optional) ---
-    rewrite_vars = ("AZURE_REWRITE_ENDPOINT", "AZURE_REWRITE_API_KEY", "AZURE_REWRITE_DEPLOYMENT")
-    missing_rewrite = [v for v in rewrite_vars if not os.environ.get(v)]
-    if missing_rewrite:
-        logging.warning(
-            "Prompt optimisation disabled – missing rewrite env var(s): %s.",
-            ", ".join(missing_rewrite),
-        )
-    else:
-        _rewrite_client = AzureOpenAI(
-            azure_endpoint=os.environ["AZURE_REWRITE_ENDPOINT"],
-            api_key=os.environ["AZURE_REWRITE_API_KEY"],
-            api_version="2024-02-01",
-        )
-        logging.info("Azure OpenAI rewrite client initialized (deployment: %s).", os.environ["AZURE_REWRITE_DEPLOYMENT"])
+    # No rewrite/prompt-optimisation client is used by this server.
 
 
-def optimize_prompt(raw: str) -> str:
-    if _rewrite_client is None:
-        return raw
-
-    try:
-        messages = [
-            {"role": "system", "content": _REWRITE_SYSTEM_INSTRUCTION},
-            {"role": "user", "content": raw},
-        ]
-        # Debug-log the payload sent to the rewrite model
-        logging.debug("Rewrite model request | endpoint=%s deployment=%s\n%s",
-                      os.environ.get("AZURE_REWRITE_ENDPOINT"),
-                      os.environ.get("AZURE_REWRITE_DEPLOYMENT"),
-                      json.dumps(messages, ensure_ascii=False, indent=2))
-
-        result = _rewrite_client.chat.completions.create(
-            model=os.environ["AZURE_REWRITE_DEPLOYMENT"],
-            messages=messages,
-            max_tokens=REWRITE_MAX_TOKENS,
-            temperature=0.0,
-        )
-        optimized = (result.choices[0].message.content or "").strip()
-        logging.debug("Rewrite model response: %r", optimized)
-        if not optimized:
-            logging.warning("Rewrite model returned empty response – using original message.")
-            return raw
-        logging.info("Prompt optimised | original=%r | optimised=%r", raw, optimized)
-        return optimized
-    except OpenAIError as exc:
-        logging.warning("Prompt optimisation failed (%s) – using original message.", exc)
-        return raw
+# No prompt optimisation: user messages are forwarded to the main model unchanged.
 
 
 async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 3.0) -> Optional[str]:
@@ -327,14 +261,15 @@ async def chat(req: ChatRequest) -> ChatResponse:
         logging.debug("Inserting retrieved context into history (len=%d)", len(context_text))
         history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})
 
-    # 2) Run the lightweight prompt optimiser (if configured) and append the user's message
-    optimized_message = optimize_prompt(req.message)
-    history.append({"role": "user", "content": optimized_message})
+    # 2) Append the user's raw message to the history
+    history.append({"role": "user", "content": req.message})
 
     # Log full history that will be sent to main model
     logging.debug("LLM request messages (full history):\n%s", json.dumps(history, ensure_ascii=False, indent=2))
 
     try:
+        print(f"DEBUG: Nutze Endpoint {os.environ.get('AZURE_OPENAI_ENDPOINT')}")
+        print(f"DEBUG: Nutze Deployment Name '{os.environ.get('AZURE_OPENAI_DEPLOYMENT')}'")
         completion = _azure_client.chat.completions.create(
             model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
             messages=history,
@@ -343,15 +278,13 @@ async def chat(req: ChatRequest) -> ChatResponse:
         answer = completion.choices[0].message.content or ""
         history.append({"role": "assistant", "content": answer})
         return ChatResponse(answer=answer)
-    except OpenAIError as exc:
-        # Remove the user message that failed so the history stays consistent
+    except Exception as e: 
+        logging.error("AZURE FEHLER: %s", str(e), exc_info=True) 
+        return ChatResponse(answer=f"Interner Fehler: {type(e).__name__}")
+    """ OpenAIError as exc:
         history.pop()
-        raise HTTPException(status_code=502, detail="Azure OpenAI request failed.") from exc
+        raise HTTPException(status_code=502, detail=f"Azure Error: {str(exc)}") # Detail hinzufügen! """
 
-# ensure debug logs go to the terminal
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-# also set uvicorn loggers to DEBUG so their output is visible
-for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-    logging.getLogger(name).setLevel(logging.DEBUG)
+
 
 
