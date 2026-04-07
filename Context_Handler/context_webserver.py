@@ -6,6 +6,7 @@ import Context_Handler as cH
 from dotenv import load_dotenv
 import os
 
+load_dotenv()
 
 webserver = Flask(__name__)
 
