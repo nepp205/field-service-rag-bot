@@ -12,12 +12,6 @@ Required environment variables (supplied via repository secrets):
     AZURE_OPENAI_API_KEY       – Azure OpenAI API key
     AZURE_OPENAI_DEPLOYMENT    – Azure deployment name (main model)
 
-TODO:
-    Uvicorn rausschmeißen
-    Env anlegen checken
-    Docker architektur schreiben
-
-
 Usage:
     uvicorn requesthandler:app --reload
 """
@@ -28,8 +22,6 @@ from pathlib import Path
 import json
 import httpx
 from typing import Optional
-
-
 
 from fastapi import FastAPI, HTTPException
 from openai import AzureOpenAI, OpenAIError
@@ -46,13 +38,9 @@ except Exception:
 MAX_TOKENS = 100
 
 
-
-
 # Context Handler config (optional). If not set, context lookup is skipped.
 CONTEXT_HANDLER_URL = "http://localhost:5000/context"
 CONTEXT_HANDLER_TOKEN = os.environ.get("CONTEXT_HANDLER_TOKEN")
-
-# (No rewrite/prompt-optimisation assistant configured.)
 
 # ---------------------------------------------------------------------------
 # System prompt – loaded once at module import time from system_prompt.txt.
@@ -119,16 +107,14 @@ class SessionInitResponse(BaseModel):
     sessionId: str
 
 
-# remove the eager import-time check and client creation; create client on startup
 _azure_client = None
-# no rewrite client used
+
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize AzureOpenAI clients if env vars are present; otherwise warn."""
     global _azure_client
 
-    # --- Main model client ---
     missing = [
         v for v in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT")
         if not os.environ.get(v)
@@ -145,11 +131,6 @@ async def startup_event():
             api_version="2024-02-01",
         )
         logging.info("Azure OpenAI client initialized.")
-
-    # No rewrite/prompt-optimisation client is used by this server.
-
-
-# No prompt optimisation: user messages are forwarded to the main model unchanged.
 
 
 async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 3.0) -> Optional[str]:
@@ -268,8 +249,6 @@ async def chat(req: ChatRequest) -> ChatResponse:
     logging.debug("LLM request messages (full history):\n%s", json.dumps(history, ensure_ascii=False, indent=2))
 
     try:
-        print(f"DEBUG: Nutze Endpoint {os.environ.get('AZURE_OPENAI_ENDPOINT')}")
-        print(f"DEBUG: Nutze Deployment Name '{os.environ.get('AZURE_OPENAI_DEPLOYMENT')}'")
         completion = _azure_client.chat.completions.create(
             model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
             messages=history,
@@ -278,13 +257,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         answer = completion.choices[0].message.content or ""
         history.append({"role": "assistant", "content": answer})
         return ChatResponse(answer=answer)
-    except Exception as e: 
-        logging.error("AZURE FEHLER: %s", str(e), exc_info=True) 
+    except Exception as e:
+        logging.error("AZURE FEHLER: %s", str(e), exc_info=True)
         return ChatResponse(answer=f"Interner Fehler: {type(e).__name__}")
-    """ OpenAIError as exc:
-        history.pop()
-        raise HTTPException(status_code=502, detail=f"Azure Error: {str(exc)}") # Detail hinzufügen! """
-
-
-
 
