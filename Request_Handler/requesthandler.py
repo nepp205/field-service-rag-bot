@@ -43,7 +43,10 @@ MAX_TOKENS = 100
 
 
 # Context Handler config (optional). If not set, context lookup is skipped.
-CONTEXT_HANDLER_URL = "http://localhost:5000/context"
+# CONTEXT_HANDLER_URL can be overridden via environment variable so the correct
+# Docker service name (e.g. http://context-handler:5000/context) is used when
+# both services run inside the same Docker network.
+CONTEXT_HANDLER_URL = os.environ.get("CONTEXT_HANDLER_URL", "http://localhost:5000/context")
 CONTEXT_HANDLER_TOKEN = os.environ.get("CONTEXT_HANDLER_TOKEN")
 
 # ---------------------------------------------------------------------------
