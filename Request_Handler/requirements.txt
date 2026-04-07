@@ -1,8 +1,10 @@
 fastapi
 uvicorn
 gunicorn
+pydantic
 pypdf
 sentence-transformers
 chromadb
 openai>=1.0.0
-httpx>=0.24.0
+httpx>=0.24,<0.28
+python-dotenv
