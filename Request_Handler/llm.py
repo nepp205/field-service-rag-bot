@@ -3,7 +3,7 @@
 #- init_clients(): create an AzureOpenAI client from environment variables.
 #- fetch_context(): optional call to an external Context_Handler service.
 #- get_azure_client(): return the initialized Azure client.
- 
+
 import os
 import logging
 import httpx
@@ -33,6 +33,16 @@ def init_clients() -> None:
     # Initialize the Azure OpenAI client
     global _azure_client
     #env variables
+    missing = [
+        v for v in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT")
+        if not os.environ.get(v)
+    ]
+    if missing:
+        logging.warning(
+            "Missing required environment variable(s): %s. Server will start but /api/chat will return 503 until set.",
+            ", ".join(missing),
+        )
+
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
     api_key = os.getenv("AZURE_OPENAI_API_KEY")
     api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
@@ -45,20 +55,21 @@ def init_clients() -> None:
         _azure_client = None
 
 
-
-
-
-async def fetch_context(query: str, timeout: float = 3.0) -> Optional[str]:
+async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 3.0) -> Optional[str]:
     """Call the Context_Handler service and return a plain text context.
 
     If the service is not configured (no token or URL) this returns None.
+    An optional ``model`` filter can be forwarded to the Context_Handler so it
+    can restrict results to documents relevant to a specific appliance model.
     """
     if not CONTEXT_HANDLER_URL or not CONTEXT_HANDLER_TOKEN:
         logging.debug("Context handler not configured; skipping fetch")
         return None
 
     headers = {"Authorization": f"Bearer {CONTEXT_HANDLER_TOKEN}", "Content-Type": "application/json"}
-    payload = {"query": query}
+    payload: dict = {"query": query}
+    if model:
+        payload["model"] = model
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:

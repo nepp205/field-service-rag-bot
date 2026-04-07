@@ -15,8 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from api import router
 from llm import init_clients
 
-# setup logging to stdout
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", stream=sys.stdout)
+# setup logging to stdout (DEBUG so all diagnostic messages are visible)
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stdout)
+for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+    logging.getLogger(name).setLevel(logging.DEBUG)
 
 # startup: initialise Azure OpenAI client once
 app = FastAPI(title="Field-Service RAG Bot API")
