@@ -10,3 +10,4 @@ __pycache__
 *.md
 node_modules
 .vscode
+test_request.py
