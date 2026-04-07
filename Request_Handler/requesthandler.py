@@ -13,7 +13,11 @@ Required environment variables (supplied via repository secrets):
     AZURE_OPENAI_DEPLOYMENT    – Azure deployment name (main model)
 
 Usage:
-    uvicorn requesthandler:app --reload
+    # development (auto-reload on file changes)
+    gunicorn -k uvicorn.workers.UvicornWorker --reload requesthandler:app
+
+    # production (via gunicorn.conf.py)
+    gunicorn -c gunicorn.conf.py requesthandler:app
 """
 
 import os
