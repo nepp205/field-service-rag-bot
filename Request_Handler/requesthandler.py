@@ -28,6 +28,10 @@ import os
 import logging
 from pathlib import Path
 import json
+import httpx
+from typing import Optional
+
+import Context_Handler 
 
 from fastapi import FastAPI, HTTPException
 from openai import AzureOpenAI, OpenAIError
@@ -41,8 +45,12 @@ try:
 except Exception:
     pass
 
-MAX_TOKENS = 51
+MAX_TOKENS = 100
 REWRITE_MAX_TOKENS = 150
+
+# Context Handler config (optional). If not set, context lookup is skipped.
+CONTEXT_HANDLER_URL = "http://localhost:5000/context"
+CONTEXT_HANDLER_TOKEN = os.environ.get("CONTEXT_HANDLER_TOKEN")
 
 # ---------------------------------------------------------------------------
 # Rewrite / prompt-optimisation system instruction.
@@ -96,10 +104,16 @@ app.add_middleware(
 
 
 class ChatRequest(BaseModel):
-    """Incoming chat message from the front-end."""
+    """Incoming chat message from the front-end.
+
+    Optional `model` can be provided by the frontend and is forwarded to the
+    Context_Handler as a filter. It does NOT change the Azure deployment used
+    for the final LLM call (that is controlled via AZURE_OPENAI_DEPLOYMENT).
+    """
 
     message: str
     sessionId: str
+    model: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -198,6 +212,53 @@ def optimize_prompt(raw: str) -> str:
         return raw
 
 
+async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 3.0) -> Optional[str]:
+    """Call the external Context_Handler HTTP service to retrieve relevant context.
+
+    Returns the context string on success or None on error / if service not configured.
+    """
+    if not CONTEXT_HANDLER_URL or not CONTEXT_HANDLER_TOKEN:
+        logging.debug("Context handler not configured (URL/token missing) – skipping context fetch.")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {CONTEXT_HANDLER_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {"query": query}
+    if model:
+        payload["model"] = model
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            logging.debug("Calling Context_Handler %s with payload: %s", CONTEXT_HANDLER_URL, payload)
+            resp = await client.post(CONTEXT_HANDLER_URL, headers=headers, json=payload)
+        logging.debug("Context_Handler response status: %s", resp.status_code)
+        if resp.status_code != 200:
+            logging.warning("Context handler returned non-200 status %s: %s", resp.status_code, resp.text)
+            return None
+        data = resp.json()
+        context = data.get("context")
+        if context is None:
+            logging.warning("Context handler response missing 'context' field: %s", data)
+            return None
+        # ensure string
+        if isinstance(context, list):
+            # join list items into a single string
+            context = "\n\n".join(map(str, context))
+        else:
+            context = str(context)
+        logging.debug("Retrieved context length=%d", len(context))
+        return context
+    except httpx.RequestError as exc:
+        logging.warning("Context handler request failed: %s", exc)
+        return None
+    except Exception as exc:
+        logging.warning("Unexpected error fetching context: %s", exc)
+        return None
+
+
 @app.post("/api/session/init", response_model=SessionInitResponse)
 async def session_init(req: SessionInitRequest) -> SessionInitResponse:
     """Initialise a chat session with the system prompt.
@@ -246,6 +307,21 @@ async def chat(req: ChatRequest) -> ChatResponse:
         _sessions[req.sessionId] = [{"role": "system", "content": _SYSTEM_PROMPT}]
 
     history = _sessions[req.sessionId]
+
+    # 1) Try fetching context from the Context_Handler service (optional)
+    try:
+        context_text = await fetch_context(req.message, model=req.model)
+    except Exception as e:
+        logging.warning("Error while fetching context: %s", e)
+        context_text = None
+
+    if context_text:
+        # Insert the returned context right after the system prompt so the model sees it
+        # without overwriting the main system instruction.
+        logging.debug("Inserting retrieved context into history (len=%d)", len(context_text))
+        history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})
+
+    # 2) Run the lightweight prompt optimiser (if configured) and append the user's message
     optimized_message = optimize_prompt(req.message)
     history.append({"role": "user", "content": optimized_message})
 
@@ -271,4 +347,5 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(nam
 # also set uvicorn loggers to DEBUG so their output is visible
 for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
     logging.getLogger(name).setLevel(logging.DEBUG)
+
 
