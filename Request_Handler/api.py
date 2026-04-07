@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException
 from openai import OpenAIError
 from pydantic import BaseModel
 
-from llm import fetch_context, get_azure_client, optimize_prompt
+from llm import MAX_TOKENS, fetch_context, get_azure_client, optimize_prompt
 
 # ---------------------------------------------------------------------------
 # System prompt – loaded once at import time from system_prompt.txt.
@@ -125,7 +125,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     history = _sessions[req.sessionId]
 
-    # 1) Try fetching context from the Context_Handler service (optional)
+    # 1) Try fetching context from the Context_Handler service (optional).
+    # Replace the previous context entry (position 1) to avoid accumulation.
+    context_inserted = False
     try:
         context_text = await fetch_context(req.message, model=req.model)
     except Exception as exc:
@@ -136,7 +138,12 @@ async def chat(req: ChatRequest) -> ChatResponse:
         logging.debug(
             "Inserting retrieved context into history (len=%d)", len(context_text)
         )
-        history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})
+        context_msg = {"role": "system", "content": f"Retrieved context:\n{context_text}"}
+        if len(history) > 1 and history[1].get("content", "").startswith("Retrieved context:"):
+            history[1] = context_msg
+        else:
+            history.insert(1, context_msg)
+        context_inserted = True
 
     # 2) Run the lightweight prompt optimiser (if configured) and append user message
     optimized_message = optimize_prompt(req.message)
@@ -151,11 +158,14 @@ async def chat(req: ChatRequest) -> ChatResponse:
         completion = azure_client.chat.completions.create(
             model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
             messages=history,
-            max_tokens=100,
+            max_tokens=MAX_TOKENS,
         )
         answer = completion.choices[0].message.content or ""
         history.append({"role": "assistant", "content": answer})
         return ChatResponse(answer=answer)
     except OpenAIError as exc:
+        # Remove the user message (and freshly inserted context) to keep history consistent
         history.pop()
+        if context_inserted and len(history) > 1 and history[1].get("content", "").startswith("Retrieved context:"):
+            history.pop(1)
         raise HTTPException(status_code=502, detail="Azure OpenAI request failed.") from exc

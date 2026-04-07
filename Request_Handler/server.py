@@ -8,6 +8,7 @@ Start modes:
 
 import logging
 import sys
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
@@ -28,9 +29,20 @@ for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
     logging.getLogger(_name).setLevel(logging.DEBUG)
 
 # ---------------------------------------------------------------------------
+# Lifespan – initialise Azure OpenAI clients on startup.
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_clients()
+    yield
+
+
+# ---------------------------------------------------------------------------
 # FastAPI application
 # ---------------------------------------------------------------------------
-app = FastAPI(title="Field-Service RAG Bot API")
+app = FastAPI(title="Field-Service RAG Bot API", lifespan=lifespan)
 
 # Allow all origins for the demo phase.
 # Restrict `allow_origins` to the actual front-end URL in production.
@@ -43,12 +55,6 @@ app.add_middleware(
 )
 
 app.include_router(router)
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    """Initialise Azure OpenAI clients on application startup."""
-    init_clients()
 
 
 # ---------------------------------------------------------------------------
