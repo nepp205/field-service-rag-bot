@@ -1,9 +1,12 @@
+# gehört zu Context_Handler
+# Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
+
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext
 from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 import re
 from dotenv import load_dotenv
 import os
@@ -21,27 +24,29 @@ BATCH_SIZE = 50
 print("Lade PDFs...")
 loader = SimpleDirectoryReader("field-service-rag-bot/Context_Handler/pdfs/")
 docs = loader.load_data()
+print(docs[0].text[:1000])
 
 print(f"{len(docs)} Dokumente geladen")
 
 # Text-Preprocessing
 def clean_text(text: str) -> str:
-    """Bereinigt Text von Noise und Formatierungsfehlern"""
+    """Cleans text from Noise and format-errors"""
     text = re.sub(r'\s+', ' ', text)
     text = re.sub(r'\n+', ' ', text)
     return text.strip()
 
 for doc in docs:
-    doc.text = clean_text(doc.text)
+    doc.set_content(clean_text(doc.text))
 
 # 2. Text in Nodes zerlegen
 node_parser = SimpleNodeParser.from_defaults(
-    chunk_size=500,
-    chunk_overlap=100
+    chunk_size=800,
+    chunk_overlap=150
 )
 
 nodes = node_parser.get_nodes_from_documents(docs)
 print(f"{len(nodes)} Nodes erstellt")
+print(nodes[0].get_content()[:1000])
 
 # 3. Embeddings-Modell
 embed_model = HuggingFaceEmbedding(
@@ -66,6 +71,14 @@ client.create_collection(
     vectors_config=VectorParams(size=1024, distance=Distance.COSINE)
 )
 print("Neue Qdrant Collection erstellt")
+
+# Payload-Index für Metadata-Filter auf Dateinamen erstellen
+client.create_payload_index(
+    collection_name=COLLECTION_NAME,
+    field_name="file_name",
+    field_schema=PayloadSchemaType.KEYWORD,
+)
+print("Payload-Index für 'file_name' erstellt")
 
 # 5. Vector Store mit Qdrant
 vector_store = QdrantVectorStore(

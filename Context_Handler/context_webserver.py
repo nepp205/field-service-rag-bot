@@ -1,3 +1,6 @@
+# gehört zu Context_Handler
+# Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
+
 from flask import Flask, request, jsonify
 import Context_Handler as cH
 from dotenv import load_dotenv
@@ -6,10 +9,13 @@ import os
 
 webserver = Flask(__name__)
 
+# Token für einfache Absicherung des Context-Endpunkts.
 SECRET_TOKEN = os.getenv("WEBSERVER_TOKEN")
 
 @webserver.route('/context', methods=['POST'])
 def get_Context():
+    # Nimmt Query + optionales Modell aus dem Request entgegen und liefert
+    # den passenden Kontext aus der Vektor-Datenbank zurück
     # Authorization Header prüfen
     auth_header = request.headers.get('Authorization')
     if not auth_header:

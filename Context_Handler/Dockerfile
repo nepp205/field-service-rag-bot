@@ -1,4 +1,7 @@
-# Mit GitHub Copilot erstellt
+# gehört zu Context_Handler
+# Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
+
+# Mit GitHub Copilot erstellt und angepasst
 # Build Stage
 FROM python:3.11-slim as builder
 
@@ -33,17 +36,16 @@ ENV FLASK_APP=context_webserver.py \
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# App-Code kopieren
-COPY . .
+# Code kopieren
+COPY context_webserver.py ./
+COPY Context_Handler.py ./
+COPY rag.py ./
+COPY pdfs ./pdfs
 
 # Gunicorn für Production
 RUN pip install --no-cache-dir gunicorn==21.2.0
 
 EXPOSE 5000
-
-# Health Check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()" || exit 1
 
 # Gunicorn mit gthread Worker (Thread-basiert, teilt Memory besser) und erhöhtem Timeout
 CMD ["gunicorn", \

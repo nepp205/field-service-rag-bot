@@ -1,5 +1,8 @@
 # RAG Vector DB - Docker Setup
 
+Gehört zu Context_Handler
+Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
+
 ## Übersicht
 Diese Anwendung ist ein Flask-basiertes RAG (Retrieval Augmented Generation) System mit:
 - **Flask Webserver** auf Port 5000

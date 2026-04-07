@@ -1,3 +1,6 @@
+# gehört zu Context_Handler
+# Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
+
 version: '3.8'
 
 services:
@@ -28,12 +31,6 @@ services:
           memory: 4G
         reservations:
           memory: 2G
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
 
 networks:
   rag-network:

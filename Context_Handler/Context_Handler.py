@@ -1,11 +1,9 @@
-import sys
-import os
-
-# Add the DB directory to the path so we can import rag
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
+# gehört zu Context_Handler
+# Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
+ 
 from rag import get_context
 
+# Schlanker Wrapper für die eigentliche Retrieval-Logik in `rag.py`
 def retrieve_context(query: str, model: str = None) -> str:
     """
     Retrieve context from the vector database for a given query.
@@ -17,13 +15,14 @@ def retrieve_context(query: str, model: str = None) -> str:
     Returns:
         str: The context retrieved from the vector database
     """
+    # Übergibt Suchanfrage und optionalen Modellfilter direkt an das RAG-Modul
     context = get_context(query=query, model=model)
     return context
 
 
 if __name__ == "__main__":
-    # Example usage
-    query = "Wie wechsle ich die Heizung in meiner Siemens Waschmaschine?"
-    model = "W1"  # Optional: Filtern nach Modellname
+    # Beispiel und Test
+    query = "Mein Geschirrspüler zeigt den Fehler F-404 an was soll ich tun?"
+    model = "pfd 401" # Optional: Filtern nach Modellname
     context = retrieve_context(query=query, model=model)
     print(context)
