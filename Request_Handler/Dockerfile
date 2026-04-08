@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --upgrade pip setuptools wheel
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --retries 5 -r requirements.txt
+RUN pip install --retries 5 -r requirements.txt
 
 # Runtime Stage
 FROM python:3.11-slim
