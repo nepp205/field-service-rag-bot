@@ -12,8 +12,7 @@ import multiprocessing
 worker_class = "uvicorn.workers.UvicornWorker"
 
 # 2 * CPU cores + 1 is the standard recommendation for I/O-bound services.
-workers = multiprocessing.cpu_count() * 2 + 1
-
+workers = 1
 # ---------------------------------------------------------------------------
 # Networking
 # ---------------------------------------------------------------------------
