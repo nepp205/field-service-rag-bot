@@ -3,25 +3,27 @@
 
 from difflib import SequenceMatcher
 from pathlib import Path
+import json
 import os
 import re
-
 from dotenv import load_dotenv
 from huggingface_hub import login
-from llama_index.core import VectorStoreIndex
-from llama_index.core.retrievers import VectorIndexRetriever
-from llama_index.core.vector_stores import ExactMatchFilter, MetadataFilters
+from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
+from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 load_dotenv()
 login(token=os.getenv("HF_TOKEN"))
 
+# Settings.llm = None # Deaktiviert das LLM explizit
+
 # Zentrale Konfiguration für Collection, Retrieval und Dokumentabgleich
-COLLECTION_NAME = "Manuals_pdfs"
-SIMILARITY_TOP_K = 15
-SIMILARITY_CUTOFF = 0.6
+
+# COLLECTION_NAME = "Manuals_pdfs"
+COLLECTION_NAME = "Dev_Test"
+SIMILARITY_TOP_RES, = 5                 # bei Tests sind bisher nur die ersten 3 bis 5 oder 6 zurückgegebenen Text chunks relevant gewesen
+SIMILARITY_CUTOFF = 0.80             # Score relativ hoch da die Inhalte sehr ähnlich sind
 DOCUMENT_MATCH_THRESHOLD = 0.80
 PDF_DIRECTORY = Path(__file__).resolve().parent / "pdfs"
 GENERIC_DOCUMENT_WORDS = {
@@ -37,25 +39,13 @@ GENERIC_DOCUMENT_WORDS = {
 
 # Embedding-Modell für Query und Indexzugriff
 embed_model = HuggingFaceEmbedding(
-    model_name="intfloat/multilingual-e5-large"
+    model_name="intfloat/multilingual-e5-large"         # größeres Modell weil es performance technisch keinen Unterschied macht
 )
 
-# Qdtrant Client Connection definition für Zugriff auf Cloud Service
+# Qdrant Client Connection definition für Zugriff auf Cloud Service
 qdrant_client = QdrantClient(
     url=os.getenv("QDRANT_URL"),
-    api_key=os.getenv("QDRANT_API_KEY")
-)
-
-# Definition der von LlammaIndex gegebenen Schnittstelle für die Interaktion mit dem Qdrant Vector Store
-vector_store = QdrantVectorStore(
-    client=qdrant_client,
-    collection_name=COLLECTION_NAME
-)
-
-# definition des Index auf basis des definierten Vector Stores und dem verwendeten embedding Modell
-index = VectorStoreIndex.from_vector_store(
-    vector_store=vector_store,
-    embed_model=embed_model
+    api_key=os.getenv("QDRANT_API_KEY"),
 )
 
 def normalize_document_name(value: str) -> str:
@@ -151,35 +141,54 @@ def resolve_document_name(model: str, threshold: float = DOCUMENT_MATCH_THRESHOL
     return best_file_name
 
 
-def build_retriever(file_name: str | None = None) -> VectorIndexRetriever:
-    """Create a retriever with an optional exact metadata filter on file_name."""
-    filters = None
-    if file_name:
-        filters = MetadataFilters(     # Metadatafilters von Llamaindex für das vorgelagerte Filtern vor der tatsächlichen Suche in der Vektordatenbank
-            filters=[ExactMatchFilter(key="file_name", value=file_name)]
-        )
+def build_filter(file_name: str | None = None) -> Filter | None:
+    """Create an optional exact metadata filter on `file_name` for native Qdrant search."""
+    if not file_name:   # wenn kein file name übergeben dann gebe auch nichts zurück
+        return None
 
-    return VectorIndexRetriever(        # Rückgabe des konfigurierten retrievers
-        index=index,
-        similarity_top_k=SIMILARITY_TOP_K,
-        similarity_cutoff=SIMILARITY_CUTOFF,
-        filters=filters,
+    return Filter(      # filter definieren 
+        must=[FieldCondition(key="file_name", match=MatchValue(value=file_name))]   # fieldCondition für qdrant client interne Filterung und Verarbeitung
     )
 
+# Mit Ki erstellt (Github Copilot) für error Handling und potentielle Fehler bei der Rückgabe
+def extract_payload_text(payload: dict) -> str:
+    """Extract the actual chunk text from the stored Qdrant payload."""
+    if not payload:
+        return ""
+
+    if isinstance(payload.get("text"), str) and payload["text"].strip():        # wenn die payload text mitliefert dann wird dieser zurückgegeben
+        return payload["text"].strip()
+
+    node_content = payload.get("_node_content")                                 # wenn in text nichts gefunden wurde wird das feld _node_content geprüft
+    if isinstance(node_content, str):                                           # wenn der inhalt da liegt dann gebe den inhalt zurück von json zu string
+        try:
+            return json.loads(node_content).get("text", "").strip()
+        except json.JSONDecodeError:                                            # wenn das schief geht gebe nichts zurück
+            return ""
+
+    return ""                                                                   # wenn in beiden nichts (kein String) drin ist gebe leeren string zurück
 
 def get_context(query: str, model: str = None) -> str:
     """Retrieve raw context nodes from Qdrant, with typo-tolerant pre-filtering."""
-    # Erst wird optional ein passender Dokumentname aufgelöst
-    # danach wird der Retriever mit genau diesem Dateifilter aufgesetzt
-    resolved_file_name = resolve_document_name(model) if model else None  # wenn model dann model | Dokumente Abgleich
-    retriever = build_retriever(resolved_file_name)
-    nodes = retriever.retrieve(query)
+    resolved_file_name = resolve_document_name(model) if model else None
+
+    response = qdrant_client.query_points(                  # query_points verlagert die verarbeitung und indexierung zu qdrant aus serverseitig effizienter
+        collection_name=COLLECTION_NAME,
+        query=embed_model.get_query_embedding(query),
+        query_filter=build_filter(resolved_file_name),
+        limit=SIMILARITY_TOP_RES,
+        score_threshold=SIMILARITY_CUTOFF,
+        with_payload=True     # parameter dafür das metadaten mit zurückgeliefert werden sollen 
+    )
 
     context = "\n\n---\n\n".join(
-        f"Quelle: {node.node.metadata.get('file_name', 'unbekannt')} "      # node.node wegen Klassenstruktur von LlamaIndex
-        f"(Seite {node.node.metadata.get('page_label', 'unbekannt')})\n"
-        f"{node.node.get_content()}"
-        for node in nodes       # nodes ist eine Liste an Node Wrappern "NodeWithScore" deswegen muss man auf den eigentlichen node mit .node zugreifen
+        f"PDF Name: {point.payload.get('file_name', 'unbekannt')}\n"
+        f"WebLink zum PDF: {point.payload.get('source') or 'unbekannt'}\n"
+        f"Seite: {point.payload.get('page_label', 'unbekannt')}\n"
+        f"{extract_payload_text(point.payload or {})}"
+        
+        for point in response.points
+        if extract_payload_text(point.payload or {})
     )
 
     return context
