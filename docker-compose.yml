@@ -44,7 +44,7 @@ services:
     build:
       context: ./Request_Handler
       dockerfile: Dockerfile
-    container_name: request-handler
+    container_name: request-handler-cont
     ports:
       - "8000:8000"
     environment:
