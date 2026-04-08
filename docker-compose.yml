@@ -61,6 +61,23 @@ services:
     networks:
       - rag-network
 
+
+
+# ── Webpage ───────────────────────────────────────────────────────────────
+  webpage:
+    build:
+      context: ./webpage
+      dockerfile: Dockerfile
+    container_name: webpage_deployment
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+
+
+# ── Shared Network ─────────────────────────────────────────────────────────
 networks:
   rag-network:
     driver: bridge
