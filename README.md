@@ -42,7 +42,7 @@ Browser  ◄──►  webpage/  ◄──►  Request_Handler (FastAPI)  ──
 The system consists of three independent microservices that run on a shared Docker network (`rag-network`):
 
 1. **Context Handler** (port 5000) – A Flask service that embeds incoming queries using `intfloat/multilingual-e5-large` via Hugging Face and retrieves the most relevant PDF chunks from a Qdrant cloud vector database. Supports optional model-name filtering with fuzzy matching.
-2. **Request Handler** (port 8000) – A FastAPI service that manages chat sessions, fetches context from the Context Handler, and calls the Azure OpenAI chat completions API to generate a grounded answer. Runs under Gunicorn + UvicornWorker.
+2. **Request Handler** (port 8000) – A FastAPI service that manages chat sessions, uses Azure OpenAI tool calling to collect structured fault information (problem, model, error code), then fetches context from the Context Handler and calls Azure OpenAI to generate a grounded answer. Runs under Gunicorn + UvicornWorker.
 3. **Webpage** (port 8080) – A self-contained single-page chat interface with speech-to-text input, text-to-speech output, and a light/dark theme toggle. Served by Nginx inside Docker.
 
 ---
@@ -64,6 +64,7 @@ field-service-rag-bot/
 ├── Request_Handler/
 │   ├── requesthandler.py          # FastAPI application
 │   ├── system_prompt.txt          # System prompt loaded at startup
+│   ├── form.json                  # Structured form for problem/model/error_code (filled by LLM tool calling)
 │   ├── gunicorn.conf.py           # Gunicorn/UvicornWorker settings
 │   ├── requirements.txt
 │   └── docker-compose.yml
@@ -99,7 +100,7 @@ field-service-rag-bot/
 
 | File | Purpose |
 |------|---------|
-| `context_webserver.py` | Flask server – exposes `POST /context` and `GET /health` |
+| `context_webserver.py` | Flask server – exposes `POST /context` |
 | `Context_Handler.py` | Wrapper that delegates to `rag.get_context()` |
 | `rag.py` | Core retrieval: embedding, Qdrant query, fuzzy document matching |
 | `create_vector_db.py` | One-time indexing script: reads PDFs, chunks, embeds, and upserts into Qdrant |
@@ -129,16 +130,11 @@ Response body:
   "context": "PDF Name: siemens-waschmaschine-W1.pdf\nWebLink zum PDF: https://...\nSeite: 12\n..."
 }
 ```
-
-**`GET /health`**
-
-Returns `200 OK` when the service is running.
-
 #### Retrieval settings (`rag.py`)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `COLLECTION_NAME` | `Dev_Test` | Qdrant collection to query |
+| `COLLECTION_NAME` | `Manuals_pdfs` | Qdrant collection to query |
 | `SIMILARITY_TOP_RES` | `5` | Maximum number of chunks to return |
 | `SIMILARITY_CUTOFF` | `0.80` | Minimum cosine similarity score |
 | `DOCUMENT_MATCH_THRESHOLD` | `0.80` | Minimum fuzzy score for model-name filter |
@@ -173,7 +169,8 @@ python Context_Handler/create_vector_db.py
 #### Responsibilities
 
 - Maintains a global conversation history (system prompt + user/assistant turns).
-- Fetches relevant context from the Context Handler before each LLM call.
+- Uses Azure OpenAI **tool calling** to extract structured information (problem description, product model name, error code) from the user's messages and stores it in `form.json`.
+- Only fetches context from the Context Handler **after** the form has been fully filled (problem, product_model_name, and error_code are all non-empty).
 - Calls Azure OpenAI chat completions and returns the answer to the frontend.
 - Exposes session management so the frontend can reset conversation history.
 
@@ -183,9 +180,17 @@ python Context_Handler/create_vector_db.py
 |------|---------|
 | `requesthandler.py` | FastAPI application with `/api/chat` and `/api/session/init` endpoints |
 | `system_prompt.txt` | System instructions loaded at startup (can be edited without code changes) |
+| `form.json` | Structured form filled by the LLM via tool calling (problem, product_model_name, error_code) |
 | `gunicorn.conf.py` | Gunicorn config: 1 UvicornWorker, port 8000, 120 s timeout |
 
-#### API endpoints
+#### Conversation flow
+
+The Request Handler uses a **two-phase** approach per chat session:
+
+1. **Phase 1 – Form filling**: Until all three fields in `form.json` are populated, each user message is sent to the LLM with a `fill_json_form` tool. The LLM extracts `problem`, `product_model_name`, and `error_code` from the conversation and calls the tool to populate the form.
+2. **Phase 2 – Context-grounded answers**: Once the form is complete, the Context Handler is queried for relevant PDF chunks before each LLM call, and the answer is grounded in the retrieved documentation.
+
+The session can be reset (resetting both conversation history and the form) via `POST /api/session/init`.
 
 **`POST /api/chat`**
 
@@ -257,7 +262,7 @@ A self-contained single-page application that requires no build step.
 | **Scroll helper** | Floating ⬇ button jumps to the latest message when the user scrolls up |
 | **Light / dark theme** | Toggle button (🌙) switches the `data-theme` attribute; CSS custom properties handle theming |
 | **Speech-to-Text (STT)** | 🎤 button uses the Web Speech API (`de-DE`); transcript is inserted into the input field. Supported in Chrome, Edge, and Safari |
-| **Text-to-Speech (TTS)** | Every bot reply is read aloud via the Web Speech API (`de-DE`, prefers Google/Hedda German voice) |
+| **Text-to-Speech (TTS)** | 🔇/🔊 toggle button enables or disables bot reply read-aloud via the Web Speech API (`de-DE`, prefers Google/Hedda German voice). **Off by default.** |
 | **Backend URL** | Configured via `API_URL` in `script.js` (default: `http://localhost:8000/api/chat`) |
 
 ---
@@ -376,7 +381,7 @@ All variables are defined in `.env` (copy from `.env.example`).
 | `QDRANT_URL` | Context Handler | URL of the Qdrant cloud cluster |
 | `QDRANT_API_KEY` | Context Handler | Qdrant API key |
 | `HF_TOKEN` | Context Handler | Hugging Face token for downloading the embedding model |
-| `WEBSERVER_TOKEN` | Both | Shared bearer token used by the Request Handler to authenticate calls to the Context Handler |
+| `WEBSERVER_TOKEN` | Both | Shared bearer token used by the Request Handler to authenticate calls to the Context Handler. Docker Compose exposes this as `CONTEXT_HANDLER_TOKEN` inside the request-handler container. |
 
 ---
 
@@ -384,17 +389,18 @@ All variables are defined in `.env` (copy from `.env.example`).
 
 | File | Setting | Description |
 |------|---------|-------------|
-| `Context_Handler/rag.py` | `COLLECTION_NAME` | Qdrant collection to query |
+| `Context_Handler/rag.py` | `COLLECTION_NAME` | Qdrant collection to query (default: `Manuals_pdfs`) |
 | `Context_Handler/rag.py` | `SIMILARITY_TOP_RES` | Max number of retrieved chunks |
 | `Context_Handler/rag.py` | `SIMILARITY_CUTOFF` | Minimum similarity score (0–1) |
 | `Context_Handler/rag.py` | `DOCUMENT_MATCH_THRESHOLD` | Fuzzy score threshold for model-name filter |
-| `Context_Handler/create_vector_db.py` | `COLLECTION_NAME` | Target Qdrant collection for indexing |
+| `Context_Handler/create_vector_db.py` | `COLLECTION_NAME` | Target Qdrant collection for indexing (default: `Manuals_pdfs`) |
 | `Context_Handler/create_vector_db.py` | `BATCH_SIZE` | Nodes per upsert batch |
 | `Context_Handler/pdf_sources.json` | — | Maps PDF stems to public source URLs |
 | `Request_Handler/requesthandler.py` | `MAX_TOKENS` | Maximum tokens per LLM response |
 | `Request_Handler/requesthandler.py` | `CONTEXT_HANDLER_URL` | Context Handler endpoint |
 | `Request_Handler/requesthandler.py` | `allow_origins` | CORS allowed origins (restrict for production) |
 | `Request_Handler/system_prompt.txt` | — | System instructions for the LLM (edit without code changes) |
+| `Request_Handler/form.json` | — | Structured form (problem, product_model_name, error_code) populated by LLM tool calling; reset on session init |
 | `Request_Handler/gunicorn.conf.py` | `workers` | Number of Gunicorn workers (default: 1) |
 | `webpage/script.js` | `API_URL` | Request Handler endpoint called by the frontend |
 
@@ -431,7 +437,7 @@ The Azure OpenAI client failed to initialise. Check that `AZURE_OPENAI_ENDPOINT`
 - Confirm PDFs have been indexed (`create_vector_db.py` completed successfully).
 - Ensure `COLLECTION_NAME` in `rag.py` matches the collection used during indexing.
 - Lower `SIMILARITY_CUTOFF` in `rag.py` if too few chunks pass the threshold.
-- Check the Context Handler health endpoint: `GET http://localhost:5000/health`.
+- Check the Context Handler is reachable: `curl http://localhost:5000/context` (expects `400` or `401`, not a connection error).
 
 ### Voice features do not work
 
