@@ -52,10 +52,11 @@ print(f"{len(docs)} Dokumente geladen")
 # Text-Preprocessing
 def clean_text(text: str) -> str:
     """Cleans text from Noise and format-errors"""
-    text = re.sub(r'\s+', ' ', text)
-    text = re.sub(r'\n+', ' ', text)
+    text = re.sub(r'\s+', ' ', text)    # entfernt mehrere Leerzeichen und erstzt diese mit nur einem Leerzeichen
+    text = re.sub(r'\n+', ' ', text)    # ersetzt einene oder mehrere Zeilenumbrüche mit einem Leerzeichen
     return text.strip()
 
+# Metadaten zu den Dokumenten hinzufügen
 for doc in docs:
     doc.set_content(clean_text(doc.text))
 
@@ -94,7 +95,7 @@ except Exception:
 
 client.create_collection(
     collection_name=COLLECTION_NAME,
-    vectors_config=VectorParams(size=1024, distance=Distance.COSINE)
+    vectors_config=VectorParams(size=1024, distance=Distance.COSINE)  # dimensionen des e5 large sind 1024 Kosinusdistanz ist standard
 )
 print("Neue Qdrant Collection erstellt")
 

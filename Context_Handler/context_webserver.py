@@ -60,8 +60,8 @@ if __name__ == "__main__":
     }
 
     data = {
-        "query": "Mein Geschirrspüler zeigt den Fehler F-404 an was soll ich tun?",
-        "model": "pfd 401"  # Optional: Filtern nach Modellname
+        "query": "mein gerät ist masterline und ich hab fehler f550",
+        "model": ""  # Optional: Filtern nach Modellname
     }
 
     response = requests.post(url, headers=headers, json=data)

@@ -14,7 +14,8 @@ headers = {
     "Content-Type": "application/json"
 }
 data = {
-    "query": "Mein Geschirrspüler zeigt den Fehler F-404 an was soll ich tun?",
+    # "query": "Mein Geschirrspüler zeigt den Fehler F-404 an was soll ich tun?",
+    "query": "Hab Fehler bei mein Produkt brauch Hilfe?",
     "model": "pdr 508"  # Optional: Filtern nach Modellname
 }
 response = requests.post(url, headers=headers, json=data)
