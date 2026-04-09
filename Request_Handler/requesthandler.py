@@ -292,6 +292,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
                 tools=TOOLS,
                 tool_choice="auto",
                 max_tokens=MAX_TOKENS,
+                temperature=0,
             )
             print(first)
             message = first.choices[0].message
@@ -342,6 +343,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
                     model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
                     messages=history,
                     max_tokens=MAX_TOKENS,
+                    temperature=0,
                 )
 
                 answer = second.choices[0].message.content or "Okay"
@@ -353,6 +355,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
                 model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
                 messages=history,
                 max_tokens=MAX_TOKENS,
+                temperature=0,
             )
             answer = normal.choices[0].message.content or "Okay"
 

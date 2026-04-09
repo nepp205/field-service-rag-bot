@@ -52,9 +52,9 @@ services:
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}
       # Override the URL so this container reaches context-handler by service name
-      - CONTEXT_HANDLER_URL=http://context-handler:5000/context
+      - CONTEXT_HANDLER_URL=${CONTEXT_HANDLER_URL}
       # Reuse the same shared token that context-handler expects
-      - CONTEXT_HANDLER_TOKEN=${WEBSERVER_TOKEN}
+      - CONTEXT_HANDLER_TOKEN=${CONTEXT_HANDLER_TOKEN}
     depends_on:
       - context-handler
     restart: unless-stopped
