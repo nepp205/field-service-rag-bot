@@ -19,8 +19,8 @@ load_dotenv()
 qdrant_url = os.getenv("QDRANT_URL")
 qdrant_key = os.getenv("QDRANT_API_KEY")
 
-# COLLECTION_NAME = "Manuals_pdfs"
-COLLECTION_NAME = "Dev_Test"
+COLLECTION_NAME = "Manuals_pdfs"
+# COLLECTION_NAME = "Dev_Test"
 
 BATCH_SIZE = 50
 PDF_SOURCES_PATH = Path(__file__).resolve().parent / "pdf_sources.json"
