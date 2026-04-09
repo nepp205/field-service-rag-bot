@@ -16,12 +16,10 @@ from qdrant_client.models import FieldCondition, Filter, MatchValue
 load_dotenv()
 login(token=os.getenv("HF_TOKEN"))
 
-# Settings.llm = None # Deaktiviert das LLM explizit
 
 # Zentrale Konfiguration für Collection, Retrieval und Dokumentabgleich
-
-# COLLECTION_NAME = "Manuals_pdfs"
-COLLECTION_NAME = "Dev_Test"
+COLLECTION_NAME = "Manuals_pdfs"
+# COLLECTION_NAME = "Dev_Test"
 SIMILARITY_TOP_RES, = 5                 # bei Tests sind bisher nur die ersten 3 bis 5 oder 6 zurückgegebenen Text chunks relevant gewesen
 SIMILARITY_CUTOFF = 0.80             # Score relativ hoch da die Inhalte sehr ähnlich sind
 DOCUMENT_MATCH_THRESHOLD = 0.80
@@ -192,7 +190,6 @@ def get_context(query: str, model: str = None) -> str:
     )
 
     return context
-
 
 # Test
 if __name__ == "__main__":
