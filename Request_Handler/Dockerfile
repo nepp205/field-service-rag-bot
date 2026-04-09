@@ -28,6 +28,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY requesthandler.py ./
 COPY gunicorn.conf.py ./
 COPY system_prompt.txt ./
+COPY form.json ./
 
 EXPOSE 8000
 

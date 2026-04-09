@@ -100,7 +100,7 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "problem": {"type": "string","description": "Short description of the problem the user is facing."},
+                    "problem": {"type": "string","description": "Short description of the problem the user is facing.No errorcodes or product model names, just a short problem description."},
                     "product_model_name": {"type": "string","description":"Exact or best product model name."},
                     "error_code": {"type": "string","description":"Error code associated with the problem."},
                 },
@@ -205,24 +205,16 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     history = _history #vaible für die konversation, startet mit system prompt, wird bei jeder anfrage erweitert
 
-    """ #kontext handler anfragen
-    if JSON_FILLED==True:
-        try:
-            context_text = await fetch_context(req.message, model=req.model)
-            print("Context Handler called")
-        except Exception as e:
-            logging.warning("Error while fetching context: %s", e)
-            context_text = None
-
-        if context_text:
-            history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})#context an histroy hängen für llm """
 
     #user prompt an history anhängen (aus frontend)
     history.append({"role": "user", "content": req.message})
+    print(history)
+
+
     print(_history)
     #llm anfragen
     try:
-        if not JSON_FILLED:
+        if not JSON_FILLED: #wenn json form nicht gefüllt ist, llm mit tools anfragen, damit es die form ausfüllen kann (wenn nötig)
             first = _azure_client.chat.completions.create(
                 model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
                 messages=history,
@@ -230,7 +222,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
                 tool_choice="auto",
                 max_tokens=MAX_TOKENS,
             )
-
+            print(first)
             message = first.choices[0].message
             answer = message.content or ""
 
@@ -240,7 +232,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
                     "content": message.content or "",
                     "tool_calls": message.tool_calls
                 })
-
+                print("history nach first call:", history)
                 for tool_call in message.tool_calls:
                     if tool_call.function.name == "fill_json_form":
                         args = json.loads(tool_call.function.arguments)
@@ -256,17 +248,17 @@ async def chat(req: ChatRequest) -> ChatResponse:
                         "tool_call_id": tool_call.id,
                         "content": json.dumps({"status": "ok"})
                     })
-
+                print("history nach tool call:", history)
                 if JSON_FILLED:
                     try:
+                        print("JSON form filled, fetching context with query:", req.message)
+                        print("Current JSON form state:", req.model)
                         context_text = await fetch_context(req.message, model=req.model)
-                        print("Context Handler called")
+
+                        print("Context Handler called\n ", context_text)
                     except Exception as e:
                         logging.warning("Error while fetching context: %s", e)
                         context_text = None
-
-
-
 
                     if context_text:
                         history.insert(1, {
@@ -274,6 +266,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
                             "content": f"Retrieved context:\n{context_text}"
                         })
 
+                print("history vor second call:", history)
                 second = _azure_client.chat.completions.create(
                     model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
                     messages=history,
