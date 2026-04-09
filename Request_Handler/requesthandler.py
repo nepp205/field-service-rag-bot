@@ -7,6 +7,7 @@ import json
 import httpx
 from typing import Optional
 from contextlib import asynccontextmanager
+import asyncio
 
 from fastapi import FastAPI, HTTPException
 from openai import AzureOpenAI
@@ -142,8 +143,8 @@ class SessionInitResponse(BaseModel): #antwort auf session anfrage
 
 
 
-async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 3.0) -> Optional[str]: #context von marvins context handler holen
-   #methode von github coplilot erstellt
+async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 20.0, retries: int = 2) -> Optional[str]:
+    # context von marvins context handler holen (mit Retries + grösserem Timeout)
     if not CONTEXT_HANDLER_URL or not CONTEXT_HANDLER_TOKEN:
         logging.debug("Context handler not configured (URL/token missing) – skipping context fetch.")
         return None
@@ -157,33 +158,40 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
     if model:
         payload["model"] = model
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            print("Calling Context_Handler", CONTEXT_HANDLER_URL, "with payload:", payload)
-            resp = await client.post(CONTEXT_HANDLER_URL, headers=headers, json=payload)
-        logging.debug("Context_Handler response status: %s", resp.status_code)
-        if resp.status_code != 200:
-            logging.warning("Context handler returned non-200 status %s: %s", resp.status_code, resp.text)
+    for attempt in range(retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                print("Calling Context_Handler", CONTEXT_HANDLER_URL, "with payload:", payload)
+                resp = await client.post(CONTEXT_HANDLER_URL, headers=headers, json=payload)
+
+            logging.debug("Context_Handler response status: %s", resp.status_code)
+            if resp.status_code != 200:
+                logging.warning("Context handler returned non-200 status %s: %s", resp.status_code, resp.text)
+                return None
+
+            data = resp.json()
+            context = data.get("context")
+            if context is None:
+                logging.warning("Context handler response missing 'context' field: %s", data)
+                return None
+
+            if isinstance(context, list):
+                context = "\n\n".join(map(str, context))
+            else:
+                context = str(context)
+
+            logging.debug("Retrieved context length=%d", len(context))
+            return context
+
+        except (httpx.ReadTimeout, httpx.ConnectError) as exc:
+            logging.warning("Context handler request failed (attempt %d/%d): %s", attempt + 1, retries + 1, exc, exc_info=True)
+            if attempt < retries:
+                await asyncio.sleep(1 + attempt * 1.5)
+                continue
             return None
-        data = resp.json()
-        context = data.get("context")
-        if context is None:
-            logging.warning("Context handler response missing 'context' field: %s", data)
+        except Exception as exc:
+            logging.warning("Unexpected error fetching context (%s): %r", type(exc).__name__, exc, exc_info=True)
             return None
-        # ensure string
-        if isinstance(context, list):
-            # join list items into a single string
-            context = "\n\n".join(map(str, context))
-        else:
-            context = str(context)
-        logging.debug("Retrieved context length=%d", len(context))
-        return context
-    except httpx.RequestError as exc:
-        logging.warning("Context handler request failed (%s): %r", type(exc).__name__, exc, exc_info=True)
-        return None
-    except Exception as exc:
-        logging.warning("Unexpected error fetching context (%s): %r", type(exc).__name__, exc, exc_info=True)
-        return None
 
 
 async def test_context_handler_connection(timeout: float = 3.0) -> dict:
