@@ -1,0 +1,12 @@
+# Von Github Copilot generiert, angepasst von mir(Niklas)
+services:
+  request-handler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: request-handler-cont
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped

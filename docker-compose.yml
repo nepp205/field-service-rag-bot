@@ -1,0 +1,83 @@
+# Root-level docker-compose that starts both microservices on a shared network
+# so they can reach each other by service name.
+#
+# Usage:
+#   cp .env.example .env   # fill in all secrets once
+#   docker compose up --build
+#
+# Context_Handler is built from its own directory/Dockerfile (not modified).
+# Request_Handler is built from its own directory/Dockerfile (not modified).
+# CONTEXT_HANDLER_URL is injected so the request-handler can reach the
+# context-handler container via Docker's internal DNS.
+
+services:
+
+  # ── Context Handler ──────────────────────────────────────────────────────────
+  context-handler:
+    build:
+      context: ./Context_Handler
+      dockerfile: Dockerfile
+    container_name: context-handler
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./Context_Handler/pdfs:/app/pdfs
+    environment:
+      - FLASK_APP=context_webserver.py
+      - FLASK_ENV=production
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - HF_TOKEN=${HF_TOKEN}
+      - WEBSERVER_TOKEN=${WEBSERVER_TOKEN}
+    restart: unless-stopped
+    networks:
+      - rag-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # ── Request Handler ──────────────────────────────────────────────────────────
+  request-handler:
+    build:
+      context: ./Request_Handler
+      dockerfile: Dockerfile
+    container_name: request-handler-cont
+    ports:
+      - "8000:8000"
+    environment:
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}
+      # Override the URL so this container reaches context-handler by service name
+      - CONTEXT_HANDLER_URL=http://context-handler:5000/context
+      # Reuse the same shared token that context-handler expects
+      - CONTEXT_HANDLER_TOKEN=${WEBSERVER_TOKEN}
+    depends_on:
+      - context-handler
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+
+
+# ── Webpage ───────────────────────────────────────────────────────────────
+  webpage:
+    build:
+      context: ./webpage
+      dockerfile: Dockerfile
+    container_name: webpage_deployment
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+
+
+# ── Shared Network ─────────────────────────────────────────────────────────
+networks:
+  rag-network:
+    driver: bridge

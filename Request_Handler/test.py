@@ -1,3 +1,5 @@
+#Erstellt nach Anleitung von Azure OpenAI SDK Dokumentation, angepasst von mir (Niklas) für die Verwendung mit Azure OpenAI Service.
+#nur zum testen der Verbindung und der Anfragen an das Modell, wird nicht im finalen Code benötigt
 from openai import OpenAI
 import os
 #Umgebungsvariablen aus .env laden, falls vorhanden (lokale Entwicklung)
