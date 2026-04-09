@@ -20,7 +20,7 @@ login(token=os.getenv("HF_TOKEN"))
 # Zentrale Konfiguration für Collection, Retrieval und Dokumentabgleich
 COLLECTION_NAME = "Manuals_pdfs"
 # COLLECTION_NAME = "Dev_Test"
-SIMILARITY_TOP_RES, = 5                 # bei Tests sind bisher nur die ersten 3 bis 5 oder 6 zurückgegebenen Text chunks relevant gewesen
+SIMILARITY_TOP_RES = 5                 # bei Tests sind bisher nur die ersten 3 bis 5 oder 6 zurückgegebenen Text chunks relevant gewesen
 SIMILARITY_CUTOFF = 0.80             # Score relativ hoch da die Inhalte sehr ähnlich sind
 DOCUMENT_MATCH_THRESHOLD = 0.80
 PDF_DIRECTORY = Path(__file__).resolve().parent / "pdfs"
