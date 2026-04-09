@@ -36,6 +36,8 @@ if _SYSTEM_PROMPT_PATH.is_file():
 
 _history: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] #globale variable für die konversation, startet mit system prompt
 
+JSON_FILLED=False # flag ob json für context handler gefüllt ist
+
 ### fast api 
 
 @asynccontextmanager
@@ -49,7 +51,65 @@ async def lifespan(app): #startup event definieren
     logging.info("Azure OpenAI client initialized.")
     
     yield #erst jetzt anfragen zulassen (startup abgeschlossen)
-    
+    json_form
+    JSON_FILLED=False
+
+
+
+#json handling -> Form muss ausgefüllt sein aus llm sonst kein kontext handler
+with open('form.json', 'r', encoding='utf-8') as form:
+    json_form = json.load(form)
+
+def test_json():
+    global JSON_FILLED
+    if json_form["problem"] != "" and json_form["product_model_name"] !="" and json_form["error_code"]!="":
+        JSON_FILLED = True
+    else:
+        JSON_FILLED = False
+
+""" print(json_form,JSON_FILLED)
+test_json()
+json_form['problem'] = "problem123"
+print(json_form)
+test_json()
+print(json_form,JSON_FILLED)
+json_form['product_model_name'] = "model123"
+json_form['error_code'] = "error123"
+test_json()
+print(json_form,JSON_FILLED) """
+
+_history.append({
+    "role": "system",
+    "content": "If the user provides problem, product model name or error code, call the tool fill_json_form."
+})
+print(_history)
+
+def fill_json_form(problem: str, product_model_name: str, error_code: str):
+    global json_form
+    json_form["problem"] = problem.strip()
+    json_form["product_model_name"] = product_model_name.strip()
+    json_form["error_code"] = error_code.strip()
+    test_json()
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "fill_json_form",
+            "description": "Fill the JSON form with problem, product model name and error code from the user message.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "problem": {"type": "string","description": "Short description of the problem the user is facing."},
+                    "product_model_name": {"type": "string","description":"Exact or best product model name."},
+                    "error_code": {"type": "string","description":"Error code associated with the problem."},
+                },
+                "required": ["problem", "product_model_name", "error_code"],
+                "additionalProperties": False,
+            },
+        },
+    }
+]
 
 # fast api app für rest endpunkte (nutzt lifespan)
 app = FastAPI(title="Field-Service RAG Bot API", lifespan=lifespan)
@@ -146,28 +206,92 @@ async def chat(req: ChatRequest) -> ChatResponse:
     history = _history #vaible für die konversation, startet mit system prompt, wird bei jeder anfrage erweitert
 
     #kontext handler anfragen
-    try:
-        context_text = await fetch_context(req.message, model=req.model)
-    except Exception as e:
-        logging.warning("Error while fetching context: %s", e)
-        context_text = None
+    if JSON_FILLED==True:
+        try:
+            context_text = await fetch_context(req.message, model=req.model)
+            print("Context Handler called")
+        except Exception as e:
+            logging.warning("Error while fetching context: %s", e)
+            context_text = None
 
-    if context_text:
-        history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})#context an histroy hängen für llm
+        if context_text:
+            history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})#context an histroy hängen für llm
 
     #user prompt an history anhängen (aus frontend)
     history.append({"role": "user", "content": req.message})
-
+    print(_history)
     #llm anfragen
     try:
-        completion = _azure_client.chat.completions.create(
-            model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
-            messages=history,#ganze histroy als input geben-> immer im kontext anworten
-            max_tokens=MAX_TOKENS,
-        )
-        answer = completion.choices[0].message.content or "" #antwort aus llm oder leer
-        history.append({"role": "assistant", "content": answer})# antwort an history anhängen, damit sie bei der nächsten anfrage im kontext ist
-        return ChatResponse(answer=answer)#antwort für frontend zurückgeben
+        if not JSON_FILLED:
+            first = _azure_client.chat.completions.create(
+                model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+                messages=history,
+                tools=TOOLS,
+                tool_choice="auto",
+                max_tokens=MAX_TOKENS,
+            )
+
+            message = first.choices[0].message
+            answer = message.content or ""
+
+            if message.tool_calls:
+                history.append({
+                    "role": "assistant",
+                    "content": message.content or "",
+                    "tool_calls": message.tool_calls
+                })
+
+                for tool_call in message.tool_calls:
+                    if tool_call.function.name == "fill_json_form":
+                        args = json.loads(tool_call.function.arguments)
+
+                        fill_json_form(
+                            problem=args.get("problem", ""),
+                            product_model_name=args.get("product_model_name", ""),
+                            error_code=args.get("error_code", ""),
+                        )
+
+                    history.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps({"status": "ok"})
+                    })
+
+                if JSON_FILLED:
+                    try:
+                        context_text = await fetch_context(req.message, model=req.model)
+                        print("Context Handler called")
+                    except Exception as e:
+                        logging.warning("Error while fetching context: %s", e)
+                        context_text = None
+
+                    if context_text:
+                        history.insert(1, {
+                            "role": "system",
+                            "content": f"Retrieved context:\n{context_text}"
+                        })
+
+                second = _azure_client.chat.completions.create(
+                    model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+                    messages=history,
+                    max_tokens=MAX_TOKENS,
+                )
+
+                answer = second.choices[0].message.content or "Okay"
+            else:
+                answer = message.content or "Okay"
+
+        else:
+            normal = _azure_client.chat.completions.create(
+                model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+                messages=history,
+                max_tokens=MAX_TOKENS,
+            )
+            answer = normal.choices[0].message.content or "Okay"
+
+        history.append({"role": "assistant", "content": answer})
+        return ChatResponse(answer=answer)
+            
     except Exception as e:
         logging.error("AZURE FEHLER: %s", str(e), exc_info=True)
         return ChatResponse(answer=f"Interner Fehler: {type(e).__name__}")
