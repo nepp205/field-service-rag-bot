@@ -1,3 +1,4 @@
+# Von Github Copilot generiert, angepasst von mir(Niklas)
 services:
   request-handler:
     build:
