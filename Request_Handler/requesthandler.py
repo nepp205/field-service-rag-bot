@@ -159,7 +159,7 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            print("Calling Context_Handler %s with payload: %s", CONTEXT_HANDLER_URL, payload)
+            print("Calling Context_Handler", CONTEXT_HANDLER_URL, "with payload:", payload)
             resp = await client.post(CONTEXT_HANDLER_URL, headers=headers, json=payload)
         logging.debug("Context_Handler response status: %s", resp.status_code)
         if resp.status_code != 200:
@@ -179,10 +179,10 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
         logging.debug("Retrieved context length=%d", len(context))
         return context
     except httpx.RequestError as exc:
-        logging.warning("Context handler request failed: %s", exc)
+        logging.warning("Context handler request failed (%s): %r", type(exc).__name__, exc, exc_info=True)
         return None
     except Exception as exc:
-        logging.warning("Unexpected error fetching context: %s", exc)
+        logging.warning("Unexpected error fetching context (%s): %r", type(exc).__name__, exc, exc_info=True)
         return None
 
 
