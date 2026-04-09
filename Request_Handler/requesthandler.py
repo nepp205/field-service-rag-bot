@@ -57,7 +57,7 @@ async def lifespan(app): #startup event definieren
 
 
 #json handling -> Form muss ausgefüllt sein aus llm sonst kein kontext handler
-#with open('form.json', 'r', encoding='utf-8') as form:
+with open('form.json', 'r', encoding='utf-8') as form:
     json_form = json.load(form)
 
 def test_json():
