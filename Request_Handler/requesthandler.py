@@ -1,3 +1,4 @@
+#Zusammenarbeit von Niklas und Tobias, verfeinert mit GitHub Copilot
 #import alle bibliotheken
 import os
 import logging
@@ -8,7 +9,7 @@ from typing import Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from openai import AzureOpenAI, OpenAIError
+from openai import AzureOpenAI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
