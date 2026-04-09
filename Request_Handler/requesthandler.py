@@ -301,11 +301,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
     print(_history)
     #llm anfragen
     try:
-<<<<<<< HEAD
-        if not json_filled: #wenn json form nicht gefüllt ist, llm mit tools anfragen, damit es die form ausfüllen kann (wenn nötig)
-=======
-        if not JSON_FILLED:
->>>>>>> parent of dbb30f4 (feat: enhance problem description in JSON schema and improve logging in chat function)
+        if not json_filled:
             first = _azure_client.chat.completions.create(
                 model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
                 messages=history,
@@ -340,13 +336,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
                         "tool_call_id": tool_call.id,
                         "content": json.dumps({"status": "ok"})
                     })
-<<<<<<< HEAD
                 print("history nach tool call:", history)
                 if json_filled:
-=======
-
-                if JSON_FILLED:
->>>>>>> parent of dbb30f4 (feat: enhance problem description in JSON schema and improve logging in chat function)
                     try:
                         context_text = await fetch_context(req.message, model=req.model)
                         print("Context Handler called")
