@@ -1,67 +1,58 @@
-"""FastAPI request handler for the Field-Service RAG Bot.
-
-Usage:
-    # development (auto-reload on file changes)
-    gunicorn -k uvicorn.workers.UvicornWorker --reload requesthandler:app
-
-    # production (via gunicorn.conf.py)
-    gunicorn -c gunicorn.conf.py requesthandler:app
-"""
-
+#import alle bibliotheken
 import os
 import logging
 from pathlib import Path
 import json
 import httpx
 from typing import Optional
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from openai import AzureOpenAI, OpenAIError
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
-# Optional: load a local .env when developing locally (install python-dotenv)
+
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv() #umgebungsvariablen laden
 except Exception:
     pass
 
-MAX_TOKENS = 100
+##umgebungsvariablen definieren
+#
+MAX_TOKENS = 100 #maximale länge der antwort (token sparen)
 
-
-# Context Handler config (optional). If not set, context lookup is skipped.
-# CONTEXT_HANDLER_URL can be overridden via environment variable so the correct
-# Docker service name (e.g. http://context-handler:5000/context) is used when
-# both services run inside the same Docker network.
+#verbindung zu marvins context handler
 CONTEXT_HANDLER_URL = os.environ.get("CONTEXT_HANDLER_URL", "http://localhost:5000/context")
 CONTEXT_HANDLER_TOKEN = os.environ.get("CONTEXT_HANDLER_TOKEN")
 
-# ---------------------------------------------------------------------------
-# System prompt – loaded once at module import time from system_prompt.txt.
-# Falls back to a minimal default if the file is not found.
-# ---------------------------------------------------------------------------
-_SYSTEM_PROMPT_PATH = Path(__file__).parent / "system_prompt.txt"
-try:
-    _SYSTEM_PROMPT = _SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
-    logging.info("System prompt loaded from %s", _SYSTEM_PROMPT_PATH)
-except FileNotFoundError:
-    _SYSTEM_PROMPT = "You are a helpful field service assistant."
-    logging.warning(
-        "system_prompt.txt not found at %s – using minimal default.",
-        _SYSTEM_PROMPT_PATH,
+_SYSTEM_PROMPT_PATH = Path(__file__).parent / "system_prompt.txt" #systemprompt laden
+_SYSTEM_PROMPT = "You are a helpful field service assistant." #fallback, wenns system prompt nicht gibt
+
+if _SYSTEM_PROMPT_PATH.is_file():
+    _SYSTEM_PROMPT = _SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip() #systemprompt aus datei lesen
+
+_history: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] #globale variable für die konversation, startet mit system prompt
+
+### fast api 
+
+@asynccontextmanager
+async def lifespan(app): #startup event definieren
+    global _azure_client
+    _azure_client = AzureOpenAI(
+        azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+        api_key=os.environ["AZURE_OPENAI_API_KEY"],
+        api_version="2024-02-01",
     )
+    logging.info("Azure OpenAI client initialized.")
+    
+    yield #erst jetzt anfragen zulassen (startup abgeschlossen)
+    
 
-# ---------------------------------------------------------------------------
-# In-memory session store: maps sessionId → list of OpenAI-style messages.
-# ---------------------------------------------------------------------------
-_sessions: dict[str, list[dict]] = {}
-
-app = FastAPI(title="Field-Service RAG Bot API")
-
-# Allow all origins for the demo phase.
-# Restrict `allow_origins` to the actual front-end URL in production.
-app.add_middleware(
+# fast api app für rest endpunkte (nutzt lifespan)
+app = FastAPI(title="Field-Service RAG Bot API", lifespan=lifespan)
+app.add_middleware( #anfragen von überall zulassen
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
@@ -69,70 +60,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class ChatRequest(BaseModel):
-    """Incoming chat message from the front-end.
-
-    Optional `model` can be provided by the frontend and is forwarded to the
-    Context_Handler as a filter. It does NOT change the Azure deployment used
-    for the final LLM call (that is controlled via AZURE_OPENAI_DEPLOYMENT).
-    """
-
+#schemen für die eingehenden und ausgehenden daten definieren
+class ChatRequest(BaseModel): #standard anfrage
     message: str
     sessionId: str
-    model: Optional[str] = None
+    model: Optional[str] = None #später für context handler vielleicht ergänzen, jz noch nicht vorhanden
 
-
-class ChatResponse(BaseModel):
-    """Outgoing chat answer returned to the front-end."""
-
+class ChatResponse(BaseModel): #antwort des bots
     answer: str
 
 
-class SessionInitRequest(BaseModel):
-    """Request body for initialising a new session."""
-
+class SessionInitRequest(BaseModel): #anfrage für neue session
     sessionId: str
 
 
-class SessionInitResponse(BaseModel):
-    """Response returned after a session is initialised."""
-
+class SessionInitResponse(BaseModel): #antwort auf session anfrage
     status: str
     sessionId: str
 
 
-_azure_client = None
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize AzureOpenAI clients if env vars are present; otherwise warn."""
-    global _azure_client
-
-    missing = [
-        v for v in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT")
-        if not os.environ.get(v)
-    ]
-    if missing:
-        logging.warning(
-            "Missing required environment variable(s): %s. Server will start but /api/chat will return 503 until set.",
-            ", ".join(missing),
-        )
-    else:
-        _azure_client = AzureOpenAI(
-            azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-            api_key=os.environ["AZURE_OPENAI_API_KEY"],
-            api_version="2024-02-01",
-        )
-        logging.info("Azure OpenAI client initialized.")
-
-
-async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 3.0) -> Optional[str]:
-    """Call the external Context_Handler HTTP service to retrieve relevant context.
-
-    Returns the context string on success or None on error / if service not configured.
-    """
+async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 3.0) -> Optional[str]: #context von marvins context handler holen
+   #methode von github coplilot erstellt
     if not CONTEXT_HANDLER_URL or not CONTEXT_HANDLER_TOKEN:
         logging.debug("Context handler not configured (URL/token missing) – skipping context fetch.")
         return None
@@ -175,56 +125,26 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
         return None
 
 
-@app.post("/api/session/init", response_model=SessionInitResponse)
+@app.post("/api/session/init", response_model=SessionInitResponse) #post endpunkt für neue session
 async def session_init(req: SessionInitRequest) -> SessionInitResponse:
-    """Initialise a chat session with the system prompt.
-
-    Creates a new session entry containing only the system prompt message.
-    If the session already exists it is left unchanged (idempotent).
-    The LLM is **not** called; nothing is shown in the UI.
-
-    Args:
-        req: Request body containing the client-generated session ID.
-
-    Returns:
-        A ``SessionInitResponse`` with status ``"ok"`` and the session ID.
-    """
-    if req.sessionId not in _sessions:
-        _sessions[req.sessionId] = [{"role": "system", "content": _SYSTEM_PROMPT}]
-        logging.info("Session initialised: %s", req.sessionId)
-    else:
-        logging.info("Session already exists, skipping init: %s", req.sessionId)
+    global _history
+    _history = [{"role": "system", "content": _SYSTEM_PROMPT}] #systemprompt zur history hinzufügen, damit llm immer lesen kann
+    logging.info("Session initialised/reset: %s", req.sessionId)
     return SessionInitResponse(status="ok", sessionId=req.sessionId)
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat", response_model=ChatResponse) #post endpunkt für chat anfragen
 async def chat(req: ChatRequest) -> ChatResponse:
-    """Handle a chat request and return an answer from the Azure OpenAI API.
-
-    Maintains full conversation history per session so the LLM has context
-    from previous turns. If no session exists yet (e.g. the init endpoint was
-    not called) one is created on-the-fly with the system prompt.
-
-    Args:
-        req: The incoming request containing the user's message and session ID.
-
-    Returns:
-        A ``ChatResponse`` with the generated answer string.
-    """
-    if _azure_client is None:
+   
+    if _azure_client is None: #fallback wenn azure client nicht konfiguriert ist
         raise HTTPException(
             status_code=503,
             detail="Azure OpenAI client not configured. Set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY and AZURE_OPENAI_DEPLOYMENT.",
         )
 
-    # Ensure the session exists (fallback if /api/session/init was not called)
-    if req.sessionId not in _sessions:
-        logging.warning("Session %s not found – creating on-the-fly.", req.sessionId)
-        _sessions[req.sessionId] = [{"role": "system", "content": _SYSTEM_PROMPT}]
+    history = _history #vaible für die konversation, startet mit system prompt, wird bei jeder anfrage erweitert
 
-    history = _sessions[req.sessionId]
-
-    # 1) Try fetching context from the Context_Handler service (optional)
+    #kontext handler anfragen
     try:
         context_text = await fetch_context(req.message, model=req.model)
     except Exception as e:
@@ -232,26 +152,21 @@ async def chat(req: ChatRequest) -> ChatResponse:
         context_text = None
 
     if context_text:
-        # Insert the returned context right after the system prompt so the model sees it
-        # without overwriting the main system instruction.
-        logging.debug("Inserting retrieved context into history (len=%d)", len(context_text))
-        history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})
+        history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})#context an histroy hängen für llm
 
-    # 2) Append the user's raw message to the history
+    #user prompt an history anhängen (aus frontend)
     history.append({"role": "user", "content": req.message})
 
-    # Log full history that will be sent to main model
-    logging.debug("LLM request messages (full history):\n%s", json.dumps(history, ensure_ascii=False, indent=2))
-
+    #llm anfragen
     try:
         completion = _azure_client.chat.completions.create(
             model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
-            messages=history,
+            messages=history,#ganze histroy als input geben-> immer im kontext anworten
             max_tokens=MAX_TOKENS,
         )
-        answer = completion.choices[0].message.content or ""
-        history.append({"role": "assistant", "content": answer})
-        return ChatResponse(answer=answer)
+        answer = completion.choices[0].message.content or "" #antwort aus llm oder leer
+        history.append({"role": "assistant", "content": answer})# antwort an history anhängen, damit sie bei der nächsten anfrage im kontext ist
+        return ChatResponse(answer=answer)#antwort für frontend zurückgeben
     except Exception as e:
         logging.error("AZURE FEHLER: %s", str(e), exc_info=True)
         return ChatResponse(answer=f"Interner Fehler: {type(e).__name__}")
