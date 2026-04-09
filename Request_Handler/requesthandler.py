@@ -14,19 +14,20 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv() #umgebungsvariablen laden
-except Exception:
-    pass
+
+from dotenv import load_dotenv
+load_dotenv(override=True) #umgebungsvariablen laden
+
 
 ##umgebungsvariablen definieren
 #
 MAX_TOKENS = 100 #maximale länge der antwort (token sparen)
 
 #verbindung zu marvins context handler
-CONTEXT_HANDLER_URL = os.environ.get("CONTEXT_HANDLER_URL", "http://localhost:5000/context")
-CONTEXT_HANDLER_TOKEN = os.environ.get("CONTEXT_HANDLER_TOKEN")
+CONTEXT_HANDLER_URL = os.getenv("CONTEXT_HANDLER_URL")
+CONTEXT_HANDLER_TOKEN = os.getenv("CONTEXT_HANDLER_TOKEN")
+
+
 
 _SYSTEM_PROMPT_PATH = Path(__file__).parent / "system_prompt.txt" #systemprompt laden
 _SYSTEM_PROMPT = "You are a helpful field service assistant." #fallback, wenns system prompt nicht gibt
@@ -36,7 +37,7 @@ if _SYSTEM_PROMPT_PATH.is_file():
 
 _history: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] #globale variable für die konversation, startet mit system prompt
 
-JSON_FILLED=False # flag ob json für context handler gefüllt ist
+json_filled=False # flag ob json für context handler gefüllt ist
 
 ### fast api 
 
@@ -51,32 +52,31 @@ async def lifespan(app): #startup event definieren
     logging.info("Azure OpenAI client initialized.")
     
     yield #erst jetzt anfragen zulassen (startup abgeschlossen)
-    json_form
-    JSON_FILLED=False
+  
 
 
 
 #json handling -> Form muss ausgefüllt sein aus llm sonst kein kontext handler
-with open('form.json', 'r', encoding='utf-8') as form:
+#with open('form.json', 'r', encoding='utf-8') as form:
     json_form = json.load(form)
 
 def test_json():
-    global JSON_FILLED
+    global json_filled
     if json_form["problem"] != "" and json_form["product_model_name"] !="" and json_form["error_code"]!="":
-        JSON_FILLED = True
+        json_filled = True
     else:
-        JSON_FILLED = False
+        json_filled = False
 
-""" print(json_form,JSON_FILLED)
+""" print(json_form,json_filled)
 test_json()
 json_form['problem'] = "problem123"
 print(json_form)
 test_json()
-print(json_form,JSON_FILLED)
+print(json_form,json_filled)
 json_form['product_model_name'] = "model123"
 json_form['error_code'] = "error123"
 test_json()
-print(json_form,JSON_FILLED) """
+print(json_form,json_filled) """
 
 _history.append({
     "role": "system",
@@ -159,7 +159,7 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            logging.debug("Calling Context_Handler %s with payload: %s", CONTEXT_HANDLER_URL, payload)
+            print("Calling Context_Handler %s with payload: %s", CONTEXT_HANDLER_URL, payload)
             resp = await client.post(CONTEXT_HANDLER_URL, headers=headers, json=payload)
         logging.debug("Context_Handler response status: %s", resp.status_code)
         if resp.status_code != 200:
@@ -186,11 +186,82 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
         return None
 
 
+async def test_context_handler_connection(timeout: float = 3.0) -> dict:
+    """Quick connectivity test for the Context Handler.
+
+    Returns a dict with keys:
+      - ok: bool
+      - status_code: int|None
+      - detail: short message
+      - response: decoded JSON or raw text when available
+
+    This is safe to call during startup or at runtime to verify the
+    CONTEXT_HANDLER_URL and CONTEXT_HANDLER_TOKEN are reachable and
+    returning a valid response.
+    """
+    if not CONTEXT_HANDLER_URL:
+        return {"ok": False, "status_code": None, "detail": "CONTEXT_HANDLER_URL not set"}
+    print("Context handler URL:", CONTEXT_HANDLER_URL)
+    print("Context handler token:", CONTEXT_HANDLER_TOKEN)
+    if not CONTEXT_HANDLER_TOKEN:
+        return {"ok": False, "status_code": None, "detail": "CONTEXT_HANDLER_TOKEN not set"}
+
+    headers = {
+        "Authorization": f"Bearer {CONTEXT_HANDLER_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {"query": "__health_check__"}
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(CONTEXT_HANDLER_URL, headers=headers, json=payload)
+
+        # try to decode JSON response, fall back to text
+        try:
+            content = resp.json()
+        except Exception:
+            content = resp.text
+
+        if resp.status_code == 200:
+            return {"ok": True, "status_code": resp.status_code, "detail": "OK", "response": content}
+        else:
+            print("hierist der fehler")
+            return {"ok": False, "status_code": resp.status_code, "detail": "Non-200 from context handler", "response": content}
+
+    except Exception as exc:
+        print("Context handler connectivity test failed: %s", exc)
+        return {"ok": False, "status_code": None, "detail": str(exc)}
+
+
+def test_context_handler_connection_sync(timeout: float = 3.0) -> dict:
+    """Synchronous wrapper to run the async connectivity test locally.
+
+    Use this when running the module directly (no FastAPI server). It
+    executes the async test with asyncio.run and returns the result dict.
+    """
+    import asyncio
+    return asyncio.run(test_context_handler_connection(timeout=timeout))
+
+
+if __name__ == "__main__":
+    # When executed directly we want a simple local test (no API).
+    result = test_context_handler_connection_sync()
+    try:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    except Exception:
+        # fallback to plain print if JSON serialization fails
+        print(result)
+
+
 @app.post("/api/session/init", response_model=SessionInitResponse) #post endpunkt für neue session
 async def session_init(req: SessionInitRequest) -> SessionInitResponse:
     global _history
     _history = [{"role": "system", "content": _SYSTEM_PROMPT}] #systemprompt zur history hinzufügen, damit llm immer lesen kann
-    logging.info("Session initialised/reset: %s", req.sessionId)
+    json_form["problem"] = "" #json form zurücksetzen
+    json_form["product_model_name"] = ""
+    json_form["error_code"] = ""
+    json_filled = False
+    print("Session initialised/reset: %s", req.sessionId)
     return SessionInitResponse(status="ok", sessionId=req.sessionId)
 
 
@@ -214,7 +285,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
     print(_history)
     #llm anfragen
     try:
-        if not JSON_FILLED: #wenn json form nicht gefüllt ist, llm mit tools anfragen, damit es die form ausfüllen kann (wenn nötig)
+        if not json_filled: #wenn json form nicht gefüllt ist, llm mit tools anfragen, damit es die form ausfüllen kann (wenn nötig)
             first = _azure_client.chat.completions.create(
                 model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
                 messages=history,
@@ -249,7 +320,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
                         "content": json.dumps({"status": "ok"})
                     })
                 print("history nach tool call:", history)
-                if JSON_FILLED:
+                if json_filled:
                     try:
                         print("JSON form filled, fetching context with query:", req.message)
                         print("Current JSON form state:", req.model)
