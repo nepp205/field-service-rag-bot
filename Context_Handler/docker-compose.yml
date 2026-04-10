@@ -1,8 +1,6 @@
 # gehört zu Context_Handler
 # Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
 
-version: '3.8'
-
 services:
   rag-bot:
     build:
@@ -13,9 +11,13 @@ services:
       - "5000:5000"
     volumes:
       - ./pdfs:/app/pdfs
+      - hf_cache:/opt/hf-cache
     environment:
       - FLASK_APP=context_webserver.py
       - FLASK_ENV=production
+      - HF_HOME=/opt/hf-cache
+      - TRANSFORMERS_CACHE=/opt/hf-cache
+      - SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache
       # Qdrant Vector Database Environment Variables
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
@@ -35,3 +37,6 @@ services:
 networks:
   rag-network:
     driver: bridge
+
+volumes:
+  hf_cache:

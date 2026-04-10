@@ -7,6 +7,12 @@ FROM python:3.11-slim as builder
 
 WORKDIR /app
 
+# HuggingFace-/SentenceTransformer-Cache zentral festlegen,
+# damit das Embedding-Modell bereits beim Build heruntergeladen werden kann.
+ENV HF_HOME=/opt/hf-cache \
+    TRANSFORMERS_CACHE=/opt/hf-cache \
+    SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache
+
 # System-Dependencies für PDF-Processing
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -21,6 +27,11 @@ RUN pip install --upgrade pip setuptools wheel
 COPY requirements.txt .
 RUN pip install --no-cache-dir --retries 5 -r requirements.txt
 
+# Embedding-Modell bereits beim Image-Build herunterladen,
+# damit es beim späteren Container-Start nicht erneut geladen werden muss.
+RUN mkdir -p "${HF_HOME}" && \
+    python -c "from llama_index.embeddings.huggingface import HuggingFaceEmbedding; HuggingFaceEmbedding(model_name='intfloat/multilingual-e5-large')"
+
 # Runtime Stage
 FROM python:3.11-slim
 
@@ -30,9 +41,13 @@ WORKDIR /app
 ENV FLASK_APP=context_webserver.py \
     FLASK_ENV=production \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=/opt/hf-cache \
+    TRANSFORMERS_CACHE=/opt/hf-cache \
+    SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache
 
-# Dependencies aus Builder kopieren
+# Dependencies und Modell-Cache aus Builder kopieren
+COPY --from=builder /opt/hf-cache /opt/hf-cache
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
