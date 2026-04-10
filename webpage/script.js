@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
         recognition.continuous    = false;  // stop after first utterance
-        recognition.interimResults = false; // only final results
+        recognition.interimResults = true;   // allow partial (interim) results
         recognition.lang          = 'de-DE';
 
         // Fill the input field with the recognised transcript
