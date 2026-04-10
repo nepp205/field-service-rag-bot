@@ -25,6 +25,9 @@ services:
     environment:
       - FLASK_APP=context_webserver.py
       - FLASK_ENV=production
+      - HF_HOME=/opt/hf-cache
+      - TRANSFORMERS_CACHE=/opt/hf-cache
+      - SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
       - HF_TOKEN=${HF_TOKEN}
