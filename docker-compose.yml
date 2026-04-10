@@ -18,6 +18,7 @@ services:
       context: ./Context_Handler
       dockerfile: Dockerfile
     container_name: context-handler
+    runtime: runc
     ports:
       - "5000:5000"
     volumes:
@@ -49,6 +50,7 @@ services:
       context: ./Request_Handler
       dockerfile: Dockerfile
     container_name: request-handler-cont
+    runtime: runc
     ports:
       - "8000:8000"
     environment:
@@ -73,6 +75,7 @@ services:
       context: ./webpage
       dockerfile: Dockerfile
     container_name: webpage_deployment
+    runtime: runc
     ports:
       - "8080:80"
     restart: unless-stopped

@@ -15,7 +15,16 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 load_dotenv()
-login(token=os.getenv("HF_TOKEN"))
+
+hf_token = os.getenv("HF_TOKEN")
+if hf_token:
+    try:
+        login(token=hf_token, add_to_git_credential=False)
+        print("[INFO] Hugging Face login succeeded.")
+    except Exception as exc:
+        print(f"[WARN] Hugging Face login failed; continuing without it: {exc}")
+else:
+    print("[INFO] HF_TOKEN not set; continuing without Hugging Face login.")
 
 
 # Zentrale Konfiguration für Collection, Retrieval und Dokumentabgleich
