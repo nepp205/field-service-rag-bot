@@ -25,6 +25,7 @@ SIMILARITY_TOP_RES = 7                 # bei Tests sind bisher nur die ersten 3 
 SIMILARITY_CUTOFF = 0.80             # Score relativ hoch da die Inhalte sehr ähnlich sind
 DOCUMENT_MATCH_THRESHOLD = 0.80
 PDF_DIRECTORY = Path(__file__).resolve().parent / "pdfs"
+HF_CACHE_DIR = os.getenv("HF_HOME", "/opt/hf-cache")
 GENERIC_DOCUMENT_WORDS = {
     "bedienungsanleitung",
     "gebrauchsanweisung",
@@ -39,9 +40,10 @@ GENERIC_DOCUMENT_WORDS = {
 # Embedding-Modell für Query und Indexzugriff
 _model_load_start = time.perf_counter()
 embed_model = HuggingFaceEmbedding(
-    model_name="intfloat/multilingual-e5-large"         # größeres Modell weil es performance technisch keinen Unterschied macht
+    model_name="intfloat/multilingual-e5-large",        # größeres Modell weil es performance technisch keinen Unterschied macht
+    cache_folder=HF_CACHE_DIR,
 )
-print(f"[METRIC] embed_model_load_seconds={time.perf_counter() - _model_load_start:.3f}")
+print(f"[METRIC] embed_model_load_seconds={time.perf_counter() - _model_load_start:.3f} cache_dir={HF_CACHE_DIR}")
 
 # Qdrant Client Connection definition für Zugriff auf Cloud Service
 qdrant_client = QdrantClient(
