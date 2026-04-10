@@ -40,6 +40,11 @@ _history: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] #globale 
 
 json_filled=False # flag ob json für context handler gefüllt ist
 CONTEXT_SYSTEM_PREFIX = "Retrieved context:\n"
+CONTEXT_SYSTEM_MARKERS = (
+    "Retrieved context:\n",
+    "Retrieved context:",
+    "Context:\n",
+)
 
 ### fast api 
 
@@ -119,9 +124,20 @@ def has_context_in_history(history: list[dict]) -> bool:
     return any(
         msg.get("role") == "system"
         and isinstance(msg.get("content"), str)
-        and msg["content"].startswith(CONTEXT_SYSTEM_PREFIX)
+        and msg["content"].startswith(CONTEXT_SYSTEM_MARKERS)
         for msg in history
     )
+
+
+def clear_context_from_history(history: list[dict]) -> None:
+    history[:] = [
+        msg for msg in history
+        if not (
+            msg.get("role") == "system"
+            and isinstance(msg.get("content"), str)
+            and msg["content"].startswith(CONTEXT_SYSTEM_MARKERS)
+        )
+    ]
 
 
 def upsert_context_in_history(history: list[dict], context_text: str) -> None:
@@ -130,14 +146,7 @@ def upsert_context_in_history(history: list[dict], context_text: str) -> None:
         "content": f"{CONTEXT_SYSTEM_PREFIX}{context_text}",
     }
 
-    history[:] = [
-        msg for msg in history
-        if not (
-            msg.get("role") == "system"
-            and isinstance(msg.get("content"), str)
-            and msg["content"].startswith(CONTEXT_SYSTEM_PREFIX)
-        )
-    ]
+    clear_context_from_history(history)
 
     insert_index = 1 if history and history[0].get("role") == "system" else 0
     history.insert(insert_index, context_message)
