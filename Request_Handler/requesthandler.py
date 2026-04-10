@@ -52,6 +52,13 @@ async def lifespan(app): #startup event definieren
     )
     logging.info("Azure OpenAI client initialized.")
     
+    # Startup: prüfe Context-Handler-Konnektivität (wird von Gunicorn beim Container-Start ausgeführt)
+    try:
+        result = await test_context_handler_connection(timeout=200.0)
+        logging.info("Context handler startup check: %s", result)
+    except Exception as e:
+        logging.warning("Context handler startup check failed: %s", e)
+
     yield #erst jetzt anfragen zulassen (startup abgeschlossen)
   
 
@@ -394,4 +401,23 @@ async def chat(req: ChatRequest) -> ChatResponse:
     except Exception as e:
         logging.error("AZURE FEHLER: %s", str(e), exc_info=True)
         return ChatResponse(answer=f"Interner Fehler: {type(e).__name__}")
+
+
+import os
+import asyncio
+import httpx
+
+async def health_check():
+    url = os.getenv("CONTEXT_HANDLER_URL")
+    token = os.getenv("CONTEXT_HANDLER_TOKEN")
+    if not url or not token:
+        print("CONTEXT_HANDLER_URL or CONTEXT_HANDLER_TOKEN missing")
+        return
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        resp = await client.post(url, headers=headers, json={"query": "__health_check__"})
+        print(resp.status_code, resp.text)
+
+if __name__ == "__main__":
+    asyncio.run(health_check())
 
