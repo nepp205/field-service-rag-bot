@@ -22,6 +22,7 @@ services:
       - "5000:5000"
     volumes:
       - ./Context_Handler/pdfs:/app/pdfs
+      - hf_cache:/opt/hf-cache
     environment:
       - FLASK_APP=context_webserver.py
       - FLASK_ENV=production
@@ -41,6 +42,8 @@ services:
           memory: 4G
         reservations:
           memory: 2G
+
+
 
   # ── Request Handler ──────────────────────────────────────────────────────────
   request-handler:
@@ -84,3 +87,8 @@ services:
 networks:
   rag-network:
     driver: bridge
+
+# ── Shared Volumes ─────────────────────────────────────────────────────────
+volumes:
+  hf_cache:
+  

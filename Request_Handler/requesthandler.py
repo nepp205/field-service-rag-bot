@@ -270,6 +270,7 @@ async def session_init(req: SessionInitRequest) -> SessionInitResponse:
     json_form["product_model_name"] = ""
     json_form["error_code"] = ""
     json_filled = False
+    print(json_form)
     print("Session initialised/reset: %s", req.sessionId)
     return SessionInitResponse(status="ok", sessionId=req.sessionId)
 
