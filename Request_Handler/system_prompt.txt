@@ -50,7 +50,7 @@ EXECUTION:
 
 RESPONSE FORMAT AFTER TOOL EXECUTION
 ─────────────────────────────────────
-Once context is retrieved and form is filled, structure your answer as follows:
+Once context is retrieved and form is filled, structure your answer as follows(Replace the [section headers] with reasonable titles based on the issue and documentation, formatted and translated section headings):
 
 [ISSUE OVERVIEW]
 Brief description of the reported problem and affected product
