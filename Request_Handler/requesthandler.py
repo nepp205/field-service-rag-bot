@@ -143,7 +143,7 @@ class SessionInitResponse(BaseModel): #antwort auf session anfrage
 
 
 
-async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 20.0, retries: int = 2) -> Optional[str]:
+async def fetch_context(query: str, model: Optional[str] = None, timeout: float = 200.0, retries: int = 2) -> Optional[str]:
     # context von marvins context handler holen (mit Retries + grösserem Timeout)
     if not CONTEXT_HANDLER_URL or not CONTEXT_HANDLER_TOKEN:
         logging.debug("Context handler not configured (URL/token missing) – skipping context fetch.")
@@ -181,6 +181,7 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
                 context = str(context)
 
             logging.debug("Retrieved context length=%d", len(context))
+            print ("Context retrieved:", context[:500])  # print first 500 chars of context
             return context
 
         except (httpx.ReadTimeout, httpx.ConnectError) as exc:
