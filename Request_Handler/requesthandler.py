@@ -22,7 +22,7 @@ load_dotenv(override=True) #umgebungsvariablen laden
 
 ##umgebungsvariablen definieren
 #
-MAX_TOKENS = 100 #maximale länge der antwort (token sparen)
+MAX_TOKENS = 10000 #maximale länge der antwort (token sparen)
 
 #verbindung zu marvins context handler
 CONTEXT_HANDLER_URL = os.getenv("CONTEXT_HANDLER_URL")
@@ -52,6 +52,13 @@ async def lifespan(app): #startup event definieren
     )
     logging.info("Azure OpenAI client initialized.")
     
+    # Startup: prüfe Context-Handler-Konnektivität (wird von Gunicorn beim Container-Start ausgeführt)
+    try:
+        result = await test_context_handler_connection(timeout=200.0)
+        logging.info("Context handler startup check: %s", result)
+    except Exception as e:
+        logging.warning("Context handler startup check failed: %s", e)
+
     yield #erst jetzt anfragen zulassen (startup abgeschlossen)
   
 
@@ -79,10 +86,10 @@ json_form['error_code'] = "error123"
 test_json()
 print(json_form,json_filled) """
 
-_history.append({
+""" _history.append({
     "role": "system",
     "content": "If the user provides problem, product model name or error code, call the tool fill_json_form."
-})
+}) """
 print(_history)
 
 def fill_json_form(problem: str, product_model_name: str, error_code: str):
@@ -264,13 +271,26 @@ if __name__ == "__main__":
 
 @app.post("/api/session/init", response_model=SessionInitResponse) #post endpunkt für neue session
 async def session_init(req: SessionInitRequest) -> SessionInitResponse:
-    global _history
-    _history = [{"role": "system", "content": _SYSTEM_PROMPT}] #systemprompt zur history hinzufügen, damit llm immer lesen kann
-    json_form["problem"] = "" #json form zurücksetzen
+    global _history, json_filled, json_form
+    # Basis-System-Prompt + klare Tool-Instruktion damit das Modell weiterhin Tool-Calls macht
+    _history = [
+        {"role": "system", "content": _SYSTEM_PROMPT}
+    ]
+
+    # JSON-Formular zurücksetzen und Flag zurücksetzen
+    json_form["problem"] = ""
     json_form["product_model_name"] = ""
     json_form["error_code"] = ""
     json_filled = False
-    print("Session initialised/reset: %s", req.sessionId)
+
+    # optional: persistieren, damit Datei und Speicher synchron sind
+    try:
+        with open('form.json', 'w', encoding='utf-8') as f:
+            json.dump(json_form, f, ensure_ascii=False, indent=2)
+    except Exception:
+        logging.exception("Failed to persist form.json on session init")
+
+    logging.info("Session initialised/reset: %s", req.sessionId)
     return SessionInitResponse(status="ok", sessionId=req.sessionId)
 
 
@@ -381,4 +401,23 @@ async def chat(req: ChatRequest) -> ChatResponse:
     except Exception as e:
         logging.error("AZURE FEHLER: %s", str(e), exc_info=True)
         return ChatResponse(answer=f"Interner Fehler: {type(e).__name__}")
+
+
+import os
+import asyncio
+import httpx
+
+async def health_check():
+    url = os.getenv("CONTEXT_HANDLER_URL")
+    token = os.getenv("CONTEXT_HANDLER_TOKEN")
+    if not url or not token:
+        print("CONTEXT_HANDLER_URL or CONTEXT_HANDLER_TOKEN missing")
+        return
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        resp = await client.post(url, headers=headers, json={"query": "__health_check__"})
+        print(resp.status_code, resp.text)
+
+if __name__ == "__main__":
+    asyncio.run(health_check())
 
