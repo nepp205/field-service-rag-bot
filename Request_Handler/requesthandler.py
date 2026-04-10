@@ -79,10 +79,10 @@ json_form['error_code'] = "error123"
 test_json()
 print(json_form,json_filled) """
 
-_history.append({
+""" _history.append({
     "role": "system",
     "content": "If the user provides problem, product model name or error code, call the tool fill_json_form."
-})
+}) """
 print(_history)
 
 def fill_json_form(problem: str, product_model_name: str, error_code: str):
