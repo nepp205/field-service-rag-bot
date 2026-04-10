@@ -18,17 +18,18 @@ services:
       context: ./Context_Handler
       dockerfile: Dockerfile
     container_name: context-handler
+    runtime: runc
     ports:
       - "5000:5000"
     volumes:
       - ./Context_Handler/pdfs:/app/pdfs
-    
+      - hf_cache:/opt/hf-cache
     environment:
       - FLASK_APP=context_webserver.py
       - FLASK_ENV=production
       - HF_HOME=/opt/hf-cache
-      - TRANSFORMERS_CACHE=/opt/hf-cache
-      - SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache
+      - HF_HUB_CACHE=/opt/hf-cache/hub
+      - SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache/sentence-transformers
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
       - HF_TOKEN=${HF_TOKEN}
@@ -39,11 +40,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 8G
         reservations:
-          memory: 2G
-
-
+          memory: 4G
 
   # ── Request Handler ──────────────────────────────────────────────────────────
   request-handler:
@@ -51,6 +50,7 @@ services:
       context: ./Request_Handler
       dockerfile: Dockerfile
     container_name: request-handler-cont
+    runtime: runc
     ports:
       - "8000:8000"
     environment:
@@ -75,6 +75,7 @@ services:
       context: ./webpage
       dockerfile: Dockerfile
     container_name: webpage_deployment
+    runtime: runc
     ports:
       - "8080:80"
     restart: unless-stopped
@@ -87,3 +88,6 @@ services:
 networks:
   rag-network:
     driver: bridge
+
+volumes:
+  hf_cache:
