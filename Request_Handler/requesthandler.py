@@ -381,7 +381,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
                     max_tokens=MAX_TOKENS,
                     temperature=0,
                 )
-
+                print(first)
+                print(second)
                 answer = second.choices[0].message.content or "Okay"
             else:
                 answer = message.content or "Okay"
