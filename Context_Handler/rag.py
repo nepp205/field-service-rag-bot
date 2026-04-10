@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import os
 import re
+import time
 from dotenv import load_dotenv
 from huggingface_hub import login
 from llama_index.core import Settings
@@ -20,7 +21,7 @@ login(token=os.getenv("HF_TOKEN"))
 # Zentrale Konfiguration für Collection, Retrieval und Dokumentabgleich
 COLLECTION_NAME = "Manuals_pdfs"
 # COLLECTION_NAME = "Dev_Test"
-SIMILARITY_TOP_RES = 10                 # bei Tests sind bisher nur die ersten 3 bis 5 oder 6 zurückgegebenen Text chunks relevant gewesen
+SIMILARITY_TOP_RES = 7                 # bei Tests sind bisher nur die ersten 3 bis 5 oder 6 zurückgegebenen Text chunks relevant gewesen
 SIMILARITY_CUTOFF = 0.80             # Score relativ hoch da die Inhalte sehr ähnlich sind
 DOCUMENT_MATCH_THRESHOLD = 0.80
 PDF_DIRECTORY = Path(__file__).resolve().parent / "pdfs"
@@ -36,9 +37,11 @@ GENERIC_DOCUMENT_WORDS = {
 }
 
 # Embedding-Modell für Query und Indexzugriff
+_model_load_start = time.perf_counter()
 embed_model = HuggingFaceEmbedding(
     model_name="intfloat/multilingual-e5-large"         # größeres Modell weil es performance technisch keinen Unterschied macht
 )
+print(f"[METRIC] embed_model_load_seconds={time.perf_counter() - _model_load_start:.3f}")
 
 # Qdrant Client Connection definition für Zugriff auf Cloud Service
 qdrant_client = QdrantClient(
@@ -168,16 +171,26 @@ def extract_payload_text(payload: dict) -> str:
 
 def get_context(query: str, model: str = None) -> str:
     """Retrieve raw context nodes from Qdrant, with typo-tolerant pre-filtering."""
-    resolved_file_name = resolve_document_name(model) if model else None
+    total_start = time.perf_counter()
 
+    model_resolve_start = time.perf_counter()
+    resolved_file_name = resolve_document_name(model) if model else None
+    model_resolve_seconds = time.perf_counter() - model_resolve_start
+
+    embedding_start = time.perf_counter()
+    query_embedding = embed_model.get_query_embedding(query)
+    embedding_seconds = time.perf_counter() - embedding_start
+
+    qdrant_start = time.perf_counter()
     response = qdrant_client.query_points(                  # query_points verlagert die verarbeitung und indexierung zu qdrant aus serverseitig effizienter
         collection_name=COLLECTION_NAME,
-        query=embed_model.get_query_embedding(query),
+        query=query_embedding,
         query_filter=build_filter(resolved_file_name),
         limit=SIMILARITY_TOP_RES,
         score_threshold=SIMILARITY_CUTOFF,
         with_payload=True     # parameter dafür das metadaten mit zurückgeliefert werden sollen 
     )
+    qdrant_seconds = time.perf_counter() - qdrant_start
 
     context = "\n\n---\n\n".join(
         f"PDF Name: {point.payload.get('file_name', 'unbekannt')}\n"
@@ -187,6 +200,16 @@ def get_context(query: str, model: str = None) -> str:
         
         for point in response.points
         if extract_payload_text(point.payload or {})
+    )
+
+    total_seconds = time.perf_counter() - total_start
+    print(
+        "[METRIC] "
+        f"resolve_model_seconds={model_resolve_seconds:.3f} "
+        f"embedding_seconds={embedding_seconds:.3f} "
+        f"qdrant_seconds={qdrant_seconds:.3f} "
+        f"total_seconds={total_seconds:.3f} "
+        f"hits={len(response.points)}"
     )
     print(context)
     return context
