@@ -40,21 +40,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# CUDA 12.1 Runtime-Bibliotheken installieren (cudart + cublas + cudnn8).
-# Der NVIDIA Container Runtime stellt libcuda.so.1 vom Host bereit –
-# diese Libraries hier sind der Rest des CUDA-Stacks, den PyTorch braucht.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        wget gnupg2 ca-certificates \
-    && wget -q https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb \
-    && dpkg -i cuda-keyring_1.1-1_all.deb \
-    && rm cuda-keyring_1.1-1_all.deb \
-    && apt-get update && apt-get install -y --no-install-recommends \
-        cuda-cudart-12-1 \
-        libcublas-12-1 \
-        libcudnn8 \
-    && rm -rf /var/lib/apt/lists/*
-
 # Python Einstellungen
+# LD_LIBRARY_PATH: Die NVIDIA Container Runtime (nvidia-container-toolkit)
+# bind-mountet die CUDA-Bibliotheken des Hosts unter /usr/local/cuda/lib64
+# und /usr/lib/x86_64-linux-gnu automatisch in den Container – kein manuelles
+# apt-Install der CUDA-Packages nötig (und auch nicht möglich in python:slim).
 ENV FLASK_APP=context_webserver.py \
     FLASK_ENV=production \
     PYTHONUNBUFFERED=1 \
@@ -62,7 +52,7 @@ ENV FLASK_APP=context_webserver.py \
     HF_HOME=/opt/hf-cache \
     TRANSFORMERS_CACHE=/opt/hf-cache \
     SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache \
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu
 
 # Dependencies und Modell-Cache aus Builder kopieren
 COPY --from=builder /opt/hf-cache /opt/hf-cache
