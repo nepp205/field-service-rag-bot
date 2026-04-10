@@ -93,6 +93,8 @@ CONTEXT HANDLING & FALLBACK PROTOCOL
 WHEN DOCUMENTATION IS AVAILABLE AND A URL IS PROVIDED:
   Include the URL in the response with a clear reference to the document section it relates to
   Always append to the displayed pdf url the hash '#page=X' to direct to the specific page in the document
+  Hyperlink always all documents that are cited in the response
+  
 
 ✗ WHEN DOCUMENTATION IS NOT AVAILABLE:
   Respond with: "I cannot find documentation for [specific query]. This information is not in 
