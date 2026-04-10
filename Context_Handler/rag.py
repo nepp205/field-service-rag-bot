@@ -33,8 +33,8 @@ COLLECTION_NAME = "Manuals_pdfs"
 SIMILARITY_TOP_RES = 20                # bei Tests sind bisher nur die ersten 3 bis 5 oder 6 zurückgegebenen Text chunks relevant gewesen
 SIMILARITY_CUTOFF = 0.5             # Score relativ hoch da die Inhalte sehr ähnlich sind
 DOCUMENT_MATCH_THRESHOLD = 0.80
-PDF_DIRECTORY = Path(__file__).resolve().parent / "pdfs"
-HF_CACHE_DIR = os.getenv("HF_HOME", "/opt/hf-cache")
+DOCUMENT_CATALOG_TTL_SECONDS = 300
+HF_CACHE_DIR = os.getenv("HF_HOME", "/opt/hf-cache")        # Pfad im Docker
 GENERIC_DOCUMENT_WORDS = {
     "bedienungsanleitung",
     "gebrauchsanweisung",
@@ -50,7 +50,7 @@ GENERIC_DOCUMENT_WORDS = {
 _model_load_start = time.perf_counter()
 embed_model = HuggingFaceEmbedding(
     model_name="intfloat/multilingual-e5-large",        # größeres Modell weil es performance technisch keinen Unterschied macht
-    cache_folder=HF_CACHE_DIR,
+    cache_folder=HF_CACHE_DIR,                          # cache für docker performance
 )
 print(f"[METRIC] embed_model_load_seconds={time.perf_counter() - _model_load_start:.3f} cache_dir={HF_CACHE_DIR}")
 
@@ -75,30 +75,55 @@ def normalize_document_name(value: str) -> str:
     return " ".join(tokens)         # array wird wieder zu einem string zusammengesetzt und zurückgegeben
 
 
+DOCUMENT_CATALOG: list[dict] = []
+DOCUMENT_CATALOG_LAST_REFRESH = 0.0
+
+
 def build_document_catalog() -> list[dict]:
-    """Create a simple catalog of the indexed source PDF names."""
-    # Der Katalog wird aus den lokalen PDF-Dateinamen aufgebaut und später
-    # für den Modellabgleich vor dem eigentlichen Retrieval genutzt
-    catalog = []
+    """Create a cached catalog of indexed PDF names from Qdrant payload metadata."""
+    # Der Katalog wird direkt aus Qdrant geladen, damit kein lokales `pdfs/`
+    # Verzeichnis für den Modellabgleich benötigt wird.
+    global DOCUMENT_CATALOG, DOCUMENT_CATALOG_LAST_REFRESH
 
-    if not PDF_DIRECTORY.exists():
-        return catalog
+    now = time.time()
+    cache_is_fresh = (now - DOCUMENT_CATALOG_LAST_REFRESH) < DOCUMENT_CATALOG_TTL_SECONDS   # für doceker damit der catalog nicht immer neu aufgebaut werden muss  ttl auf 300 sec dann refresh
+    if DOCUMENT_CATALOG and cache_is_fresh:
+        return DOCUMENT_CATALOG
 
-    for pdf_path in sorted(PDF_DIRECTORY.glob("*.pdf")):
-        file_name = pdf_path.name
-        normalized_name = normalize_document_name(file_name)
+    catalog_by_name: dict[str, dict] = {}
+    offset = None
 
-        catalog.append(
-            {
-                "file_name": file_name,
-                "normalized_name": normalized_name,
-            }
-        )
+    try:
+        while True:
+            points, offset = qdrant_client.scroll(
+                collection_name=COLLECTION_NAME,
+                limit=256,                          # batch verarbeitungslimit 
+                offset=offset,                      # was übrig bleibt
+                with_payload=["file_name"],         # nur dateinamen für performance
+                with_vectors=False,                 # hier nur metadaten vektoren nicht nötig
+            )
 
-    return catalog
+            for point in points:
+                payload = point.payload or {}
+                file_name = payload.get("file_name") # dateinamen auslesen
 
+                if isinstance(file_name, str) and file_name.strip() and file_name not in catalog_by_name:           # katalog an pdfs anlegen 
+                    catalog_by_name[file_name] = {
+                        "file_name": file_name,
+                        "normalized_name": normalize_document_name(file_name),
+                    }
 
-DOCUMENT_CATALOG = build_document_catalog()
+            if offset is None:  # wenn nichts mehr übrig ist
+                break
+
+    except Exception as exc:
+        print(f"[WARN] Could not load document catalog from Qdrant: {exc}")
+        return DOCUMENT_CATALOG
+
+    DOCUMENT_CATALOG = sorted(catalog_by_name.values(), key=lambda entry: entry["file_name"].lower())
+    DOCUMENT_CATALOG_LAST_REFRESH = now
+    print(f"[INFO] Loaded {len(DOCUMENT_CATALOG)} document names from Qdrant metadata.")
+    return DOCUMENT_CATALOG
 
 
 def best_partial_ratio(model: str, file: str) -> float:
@@ -133,8 +158,10 @@ def resolve_document_name(model: str, threshold: float = DOCUMENT_MATCH_THRESHOL
     if not normalized_model:
         return None
 
+    catalog = build_document_catalog()
+
     matches = []
-    for entry in DOCUMENT_CATALOG:  # iterieren durch den Dokumentenkatalog 
+    for entry in catalog:  # iterieren durch den Dokumentenkatalog aus Qdrant-Metadaten
         score = best_partial_ratio(normalized_model, entry["normalized_name"]) # Ähnlichkeitsscore berechnen
         if score >= threshold: # Abgleich mit Mindestwert
             matches.append((entry["file_name"], score)) # Tupel aus Dateinamen und Ähnlichkeitswert zur Liste mit Matches hinzufügen

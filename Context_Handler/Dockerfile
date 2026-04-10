@@ -50,7 +50,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY context_webserver.py ./
 COPY Context_Handler.py ./
 COPY rag.py ./
-COPY pdfs ./pdfs
 
 # Gunicorn für Production
 RUN pip install --no-cache-dir gunicorn==21.2.0
