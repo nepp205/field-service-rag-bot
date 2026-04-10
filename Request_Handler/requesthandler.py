@@ -264,14 +264,26 @@ if __name__ == "__main__":
 
 @app.post("/api/session/init", response_model=SessionInitResponse) #post endpunkt für neue session
 async def session_init(req: SessionInitRequest) -> SessionInitResponse:
-    global _history
-    _history = [{"role": "system", "content": _SYSTEM_PROMPT}] #systemprompt zur history hinzufügen, damit llm immer lesen kann
-    json_form["problem"] = "" #json form zurücksetzen
+    global _history, json_filled, json_form
+    # Basis-System-Prompt + klare Tool-Instruktion damit das Modell weiterhin Tool-Calls macht
+    _history = [
+        {"role": "system", "content": _SYSTEM_PROMPT}
+    ]
+
+    # JSON-Formular zurücksetzen und Flag zurücksetzen
+    json_form["problem"] = ""
     json_form["product_model_name"] = ""
     json_form["error_code"] = ""
     json_filled = False
-    print(json_form)
-    print("Session initialised/reset: %s", req.sessionId)
+
+    # optional: persistieren, damit Datei und Speicher synchron sind
+    try:
+        with open('form.json', 'w', encoding='utf-8') as f:
+            json.dump(json_form, f, ensure_ascii=False, indent=2)
+    except Exception:
+        logging.exception("Failed to persist form.json on session init")
+
+    logging.info("Session initialised/reset: %s", req.sessionId)
     return SessionInitResponse(status="ok", sessionId=req.sessionId)
 
 
