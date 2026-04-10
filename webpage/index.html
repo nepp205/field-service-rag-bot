@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Field Service RAG Bot</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Bundled locally so Docker containers work without internet access -->
+    <script src="marked.umd.js"></script>
+    <script src="purify.min.js"></script>
     <!-- script.js is deferred so the DOM is ready before JS runs -->
     <script src="script.js" defer></script>
 </head>

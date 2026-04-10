@@ -147,10 +147,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function addMessage(role, text, options = {}) {
         const m = document.createElement('div');
         m.className = `message ${role}`;
+        if (options.placeholder) m.classList.add('placeholder');
 
         const b = document.createElement('div');
         b.className = 'bubble';
-        b.textContent = text;
+
+        if (role === 'bot' && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            // Render markdown and sanitize to prevent XSS
+            b.innerHTML = DOMPurify.sanitize(marked.parse(text));
+        } else {
+            b.textContent = text;
+        }
+
         m.appendChild(b);
 
         // Source-document collapsible panel (bot messages only)
@@ -187,6 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         chatBox.appendChild(m);
         scrollToBottom();
+
+        return { messageEl: m, bubbleEl: b };
     }
 
     // ============================================================
@@ -241,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Temporary thinking placeholder shown while the request is in-flight
         const thinkingText = 'Diagnose wird erstellt...';
-        addMessage('bot', thinkingText);
+        const placeholder = addMessage('bot', thinkingText, { placeholder: true });
         if (sendBtn) sendBtn.disabled = true;
 
         const start      = Date.now();
@@ -259,21 +269,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const data   = await response.json();
             const answer = data.answer || 'Keine Antwort vom LLM erhalten.';
 
-            // Ensure the thinking message is visible for at least MIN_WAIT_MS
             const elapsed = Date.now() - start;
             const wait    = Math.max(0, MIN_WAIT_MS - elapsed);
 
             setTimeout(() => {
-                // Remove the thinking placeholder before showing the real answer
-                const msgs    = chatBox.querySelectorAll('.message.bot');
-                const lastBot = msgs[msgs.length - 1];
-                if (lastBot && lastBot.textContent === thinkingText) {
-                    lastBot.remove();
+                // Replace placeholder content with real answer
+                if (placeholder?.bubbleEl) {
+                    if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+                        placeholder.bubbleEl.innerHTML = DOMPurify.sanitize(marked.parse(answer));
+                    } else {
+                        placeholder.bubbleEl.textContent = answer;
+                    }
+                    placeholder.messageEl.classList.remove('placeholder');
+                } else {
+                    addMessage('bot', answer);
                 }
 
-                addMessage('bot', answer);
-                speak(answer); // auto-read the bot's reply aloud
-
+                speak(answer);
                 if (sendBtn) sendBtn.disabled = false;
             }, wait);
 
@@ -284,13 +296,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const wait    = Math.max(0, MIN_WAIT_MS - elapsed);
 
             setTimeout(() => {
-                // Remove the thinking placeholder before showing the error message
-                const msgs    = chatBox.querySelectorAll('.message.bot');
-                const lastBot = msgs[msgs.length - 1];
-                if (lastBot && lastBot.textContent === thinkingText) {
-                    lastBot.remove();
+                // Replace placeholder content with error message
+                if (placeholder?.bubbleEl) {
+                    placeholder.bubbleEl.textContent = 'Fehler beim Kontakt zum LLM Backend.';
+                    placeholder.messageEl.classList.remove('placeholder');
+                } else {
+                    addMessage('bot', 'Fehler beim Kontakt zum LLM Backend.');
                 }
-                addMessage('bot', 'Fehler beim Kontakt zum LLM Backend.');
                 if (sendBtn) sendBtn.disabled = false;
             }, wait);
         }

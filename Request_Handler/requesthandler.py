@@ -39,6 +39,12 @@ if _SYSTEM_PROMPT_PATH.is_file():
 _history: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] #globale variable für die konversation, startet mit system prompt
 
 json_filled=False # flag ob json für context handler gefüllt ist
+CONTEXT_SYSTEM_PREFIX = "Retrieved context:\n"
+CONTEXT_SYSTEM_MARKERS = (
+    "Retrieved context:\n",
+    "Retrieved context:",
+    "Context:\n",
+)
 
 ### fast api 
 
@@ -94,10 +100,72 @@ print(_history)
 
 def fill_json_form(problem: str, product_model_name: str, error_code: str):
     global json_form
-    json_form["problem"] = problem.strip()
-    json_form["product_model_name"] = product_model_name.strip()
-    json_form["error_code"] = error_code.strip()
+    previous = {
+        "problem": str(json_form.get("problem", "")).strip(),
+        "product_model_name": str(json_form.get("product_model_name", "")).strip(),
+        "error_code": str(json_form.get("error_code", "")).strip(),
+    }
+
+    updated = {
+        "problem": problem.strip(),
+        "product_model_name": product_model_name.strip(),
+        "error_code": error_code.strip(),
+    }
+
+    json_form["problem"] = updated["problem"]
+    json_form["product_model_name"] = updated["product_model_name"]
+    json_form["error_code"] = updated["error_code"]
     test_json()
+
+    return updated != previous
+
+
+def has_context_in_history(history: list[dict]) -> bool:
+    return any(
+        msg.get("role") == "system"
+        and isinstance(msg.get("content"), str)
+        and msg["content"].startswith(CONTEXT_SYSTEM_MARKERS)
+        for msg in history
+    )
+
+
+def clear_context_from_history(history: list[dict]) -> None:
+    history[:] = [
+        msg for msg in history
+        if not (
+            msg.get("role") == "system"
+            and isinstance(msg.get("content"), str)
+            and msg["content"].startswith(CONTEXT_SYSTEM_MARKERS)
+        )
+    ]
+
+
+def upsert_context_in_history(history: list[dict], context_text: str) -> None:
+    context_message = {
+        "role": "system",
+        "content": f"{CONTEXT_SYSTEM_PREFIX}{context_text}",
+    }
+
+    clear_context_from_history(history)
+
+    insert_index = 1 if history and history[0].get("role") == "system" else 0
+    history.insert(insert_index, context_message)
+
+
+def build_context_query(user_message: str) -> str:
+    test_json()
+    if json_filled:
+        return (
+            f"Problem: {json_form.get('problem', '')}\n"
+            f"Product model name: {json_form.get('product_model_name', '')}\n"
+            f"Error code: {json_form.get('error_code', '')}"
+        )
+    return user_message
+
+
+def persist_form_json() -> None:
+    with open('form.json', 'w', encoding='utf-8') as f:
+        json.dump(json_form, f, ensure_ascii=False, indent=2)
 
 TOOLS = [
     {
@@ -322,78 +390,80 @@ async def chat(req: ChatRequest) -> ChatResponse:
     print(_history)
     #llm anfragen
     try:
-        if not json_filled:
-            first = _azure_client.chat.completions.create(
-                model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
-                messages=history,
-                tools=TOOLS,
-                tool_choice="auto",
-                max_tokens=MAX_TOKENS,
-                temperature=0,
-            )
+        first = _azure_client.chat.completions.create(
+            model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+            messages=history,
+            tools=TOOLS,
+            tool_choice="auto",
+            max_tokens=MAX_TOKENS,
+            temperature=0,
+        )
 
-            message = first.choices[0].message
-            answer = message.content or ""
+        message = first.choices[0].message
+        answer = message.content or ""
+        form_changed = False
 
-            if message.tool_calls:
+        if message.tool_calls:
+            history.append({
+                "role": "assistant",
+                "content": message.content or "",
+                "tool_calls": message.tool_calls
+            })
+
+            for tool_call in message.tool_calls:
+                if tool_call.function.name == "fill_json_form":
+                    args = json.loads(tool_call.function.arguments)
+
+                    changed_in_call = fill_json_form(
+                        problem=args.get("problem", ""),
+                        product_model_name=args.get("product_model_name", ""),
+                        error_code=args.get("error_code", ""),
+                    )
+                    form_changed = form_changed or changed_in_call
+
                 history.append({
-                    "role": "assistant",
-                    "content": message.content or "",
-                    "tool_calls": message.tool_calls
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps({"status": "ok"})
                 })
 
-                for tool_call in message.tool_calls:
-                    if tool_call.function.name == "fill_json_form":
-                        args = json.loads(tool_call.function.arguments)
+            if form_changed:
+                try:
+                    persist_form_json()
+                except Exception:
+                    logging.exception("Failed to persist form.json after update")
 
-                        fill_json_form(
-                            problem=args.get("problem", ""),
-                            product_model_name=args.get("product_model_name", ""),
-                            error_code=args.get("error_code", ""),
-                        )
+        should_refresh_context = (
+            json_filled and (
+                form_changed
+                or not has_context_in_history(history)
+            )
+        )
 
-                    history.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": json.dumps({"status": "ok"})
-                    })
-                print("history nach tool call:", history)
-                if json_filled:
-                    try:
-                        context_text = await fetch_context(req.message, model=req.model)
-                        print("Context Handler called")
-                    except Exception as e:
-                        logging.warning("Error while fetching context: %s", e)
-                        context_text = None
+        if should_refresh_context:
+            try:
+                context_query = build_context_query(req.message)
+                context_text = await fetch_context(context_query, model=req.model)
+                print("Context Handler called")
+            except Exception as e:
+                logging.warning("Error while fetching context: %s", e)
+                context_text = None
 
+            if context_text:
+                upsert_context_in_history(history, context_text)
 
-
-
-                    if context_text:
-                        history.insert(1, {
-                            "role": "system",
-                            "content": f"Retrieved context:\n{context_text}"
-                        })
-
-                second = _azure_client.chat.completions.create(
-                    model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
-                    messages=history,
-                    max_tokens=MAX_TOKENS,
-                    temperature=0,
-                )
-
-                answer = second.choices[0].message.content or "Okay"
-            else:
-                answer = message.content or "Okay"
-
-        else:
-            normal = _azure_client.chat.completions.create(
+        if message.tool_calls:
+            second = _azure_client.chat.completions.create(
                 model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
                 messages=history,
                 max_tokens=MAX_TOKENS,
                 temperature=0,
             )
-            answer = normal.choices[0].message.content or "Okay"
+            print(first)
+            print(second)
+            answer = second.choices[0].message.content or "Okay"
+        else:
+            answer = message.content or "Okay"
 
         history.append({"role": "assistant", "content": answer})
         return ChatResponse(answer=answer)
