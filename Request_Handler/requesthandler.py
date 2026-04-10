@@ -58,12 +58,7 @@ async def lifespan(app): #startup event definieren
     )
     logging.info("Azure OpenAI client initialized.")
     
-    # Startup: prüfe Context-Handler-Konnektivität (wird von Gunicorn beim Container-Start ausgeführt)
-    try:
-        result = await test_context_handler_connection(timeout=200.0)
-        logging.info("Context handler startup check: %s", result)
-    except Exception as e:
-        logging.warning("Context handler startup check failed: %s", e)
+
 
     yield #erst jetzt anfragen zulassen (startup abgeschlossen)
   
