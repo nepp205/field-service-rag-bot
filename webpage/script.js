@@ -150,7 +150,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const b = document.createElement('div');
         b.className = 'bubble';
-        b.textContent = text;
+
+        if (role === 'bot' && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            // Render markdown and sanitize to prevent XSS
+            b.innerHTML = DOMPurify.sanitize(marked.parse(text));
+        } else {
+            b.textContent = text;
+        }
+
         m.appendChild(b);
 
         // Source-document collapsible panel (bot messages only)
