@@ -11,7 +11,6 @@
 # context-handler container via Docker's internal DNS.
 
 services:
-
   # ── Context Handler ──────────────────────────────────────────────────────────
   context-handler:
     build:
@@ -19,6 +18,7 @@ services:
       dockerfile: Dockerfile
     container_name: context-handler
     runtime: runc
+    platform: linux/amd64
     ports:
       - "5000:5000"
     volumes:
