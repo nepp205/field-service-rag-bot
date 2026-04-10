@@ -22,7 +22,7 @@ load_dotenv(override=True) #umgebungsvariablen laden
 
 ##umgebungsvariablen definieren
 #
-MAX_TOKENS = 100 #maximale länge der antwort (token sparen)
+MAX_TOKENS = 10000 #maximale länge der antwort (token sparen)
 
 #verbindung zu marvins context handler
 CONTEXT_HANDLER_URL = os.getenv("CONTEXT_HANDLER_URL")
