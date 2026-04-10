@@ -1,6 +1,6 @@
 # gehört zu Context_Handler
 # Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
-# Diese Datei wurde vollständig mit KI erstellt und ist für das chache-magaement für die schnelle Bereitstellung des Embedding Modells zur Laufzeit
+# Diese Datei wurde vollständig mit KI erstellt und ist für das chache-magaement für die schnelle Bereitstellung des Embedding Modells zur Laufzeit zuständig
 # verwednete KI Github Copilot
 import os
 from pathlib import Path
