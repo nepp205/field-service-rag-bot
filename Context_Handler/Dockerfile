@@ -7,13 +7,6 @@ FROM python:3.11-slim as builder
 
 WORKDIR /app
 
-# HuggingFace-/SentenceTransformer-Cache zentral festlegen.
-# Der Cache wird zur Laufzeit über das Docker-Volume `hf_cache` befüllt,
-# damit das Image selbst klein bleibt.
-ENV HF_HOME=/opt/hf-cache \
-    HF_HUB_CACHE=/opt/hf-cache/hub \
-    SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache/sentence-transformers
-
 # Pip & setuptools upgraden
 RUN pip install --upgrade pip setuptools wheel
 
@@ -31,6 +24,9 @@ ENV FLASK_APP=context_webserver.py \
     FLASK_ENV=production \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    # HuggingFace-/SentenceTransformer-Cache zentral festlegen.
+    # Der Cache wird zur Laufzeit über das Docker-Volume `hf_cache` befüllt,
+    # damit das Image selbst klein bleibt.
     HF_HOME=/opt/hf-cache \
     HF_HUB_CACHE=/opt/hf-cache/hub \
     SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache/sentence-transformers
@@ -40,7 +36,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Code kopieren
-COPY context_webserver.py ./
+COPY Context_Webserver.py ./
 COPY Context_Handler.py ./
 COPY rag.py ./
 COPY warm_model_cache.py ./
