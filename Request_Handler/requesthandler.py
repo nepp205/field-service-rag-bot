@@ -76,21 +76,7 @@ def test_json():
     else:
         json_filled = False
 
-""" print(json_form,json_filled)
-test_json()
-json_form['problem'] = "problem123"
-print(json_form)
-test_json()
-print(json_form,json_filled)
-json_form['product_model_name'] = "model123"
-json_form['error_code'] = "error123"
-test_json()
-print(json_form,json_filled) """
 
-""" _history.append({
-    "role": "system",
-    "content": "If the user provides problem, product model name or error code, call the tool fill_json_form."
-}) """
 print(_history)
 
 def fill_json_form(problem: str, product_model_name: str, error_code: str):
