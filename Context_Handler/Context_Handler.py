@@ -3,7 +3,7 @@
  
 from rag import get_context
 
-# Schlanker Wrapper für die eigentliche Retrieval-Logik in `rag.py`
+# Wrapper für rag.py
 def retrieve_context(query: str, model: str = None) -> str:
     """
     Retrieve context from the vector database for a given query.
