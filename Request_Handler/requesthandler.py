@@ -291,17 +291,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     history = _history #vaible für die konversation, startet mit system prompt, wird bei jeder anfrage erweitert
 
-    """ #kontext handler anfragen
-    if JSON_FILLED==True:
-        try:
-            context_text = await fetch_context(req.message, model=req.model)
-            print("Context Handler called")
-        except Exception as e:
-            logging.warning("Error while fetching context: %s", e)
-            context_text = None
-
-        if context_text:
-            history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})#context an histroy hängen für llm """
+   
 
     #user prompt an history anhängen (aus frontend)
     history.append({"role": "user", "content": req.message})
