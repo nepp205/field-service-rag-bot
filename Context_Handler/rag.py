@@ -9,7 +9,6 @@ import re
 import time
 from dotenv import load_dotenv
 from huggingface_hub import login
-from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
@@ -220,7 +219,7 @@ def get_context(query: str, model: str = None) -> str:
     embedding_seconds = time.perf_counter() - embedding_start
 
     qdrant_start = time.perf_counter()
-    response = qdrant_client.query_points(                  # query_points verlagert die verarbeitung und indexierung zu qdrant aus serverseitig effizienter
+    response = qdrant_client.query_points(                  # query_points verlagert die verarbeitung zu qdrant aus serverseitig effizienter
         collection_name=COLLECTION_NAME,
         query=query_embedding,
         query_filter=build_filter(resolved_file_name),
