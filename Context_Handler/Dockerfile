@@ -14,13 +14,6 @@ ENV HF_HOME=/opt/hf-cache \
     HF_HUB_CACHE=/opt/hf-cache/hub \
     SENTENCE_TRANSFORMERS_HOME=/opt/hf-cache/sentence-transformers
 
-# System-Dependencies für PDF-Processing
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
 # Pip & setuptools upgraden
 RUN pip install --upgrade pip setuptools wheel
 
