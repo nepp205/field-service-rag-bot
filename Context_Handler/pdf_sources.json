@@ -1,5 +1,5 @@
 {
-    "Miele PWM 907 Gebrauchs- Und Aufstellanweisung":{
+    "Miele PWM 907 Gebrauchs- Und Aufstellanweisung": {
         "source": "https://www.gastrouniversum.de/media/pdf/e8/63/c6/Miele-Gebrauchsanweisung-PWM-Waschmaschine.pdf"
     },
     "Miele-Gebrauchsanweisung-PWM-Waschmaschine": {
@@ -13,5 +13,38 @@
     },
     "pwm_514": {
         "source": "https://www.manualslib.de/manual/893735/Miele-Pwm-514.html"
+    },
+    "miele pfd 401 lw speedplus lotusweiss spuelmaschine mit korbausstattung": {
+        "source": "https://www.gastrouniversum.de/media/pdf/c2/09/f2/Miele-PFD-401-MasterLine-Datenblatt.pdf"
+    },
+    "miele pfd 402 lw speedair lotusweiss spuelmaschine mit trocknung": {
+        "source": "https://www.gastrouniversum.de/media/pdf/4e/49/63/Miele-PFD-402-SpeedAir-Sp-lmaschine-Datenblatt.pdf"
+    },
+    "miele pfd 404 lw hygiene lotusweiss spuelmaschine mit korbausstattung": {
+        "source": "https://www.gastrouniversum.de/media/pdf/8b/3e/e5/Miele-PFD402-PFD404-PFD405-PFD407-MasterLine-Bedienung.pdf"
+    },
+    "miele pfd 407 lw hygieneplus lotusweiss spuelmaschine mit korbausstattung": {
+        "source": "https://www.gastrouniversum.de/media/pdf/7c/b1/0a/Miele-Sp-lmaschine-PFD-407-HygienePlus-Datenblatt.pdf"
+    },
+    "miele pdr 908 rop el waeschetrockner 8 kg ablufttrockner": {
+        "source": "https://www.gastrouniversum.de/media/pdf/cb/d5/43/Miele-Gebrauchsanweisung-PDR-908-EL.pdf"
+    },
+    "miele pwm 906 el dp waschmaschine mit laugenpumpe 6 kg": {
+        "source": "https://www.gastrouniversum.de/media/pdf/63/91/95/Miele-Installationsplan-PWM-906-DV-DP.pdf"
+    },
+    "electrolux mypro we170p waschmaschine 8 kg mit laugenpumpe semi professionell": {
+        "source": "https://www.gastrouniversum.de/media/pdf/b1/bb/8e/Elctrolux-myPRO-Inoblatt.pdf"
+    },
+    "miele pwm 907 el dv waschmaschine mit ablaufventil 7 kg": {
+        "source": "https://www.gastrouniversum.de/media/pdf/a4/dd/95/Miele-Installationsplan-PWM-907-DV-DP.pdf"
+    },
+    "ECOMAX Unterbau 435 mm hoch für Geschirrspüler": {
+        "source": "https://www.gastrouniversum.de/media/pdf/b8/ca/f2/Ecomax-Prospekt-2024HJncaprDYtKmq.pdf"
+    },
+    "electrolux pw9c waschschleudermaschine 9 kg professional": {
+        "source": "https://www.gastrouniversum.de/media/pdf/35/aa/51/Electrolux-PW9C-Installationsanleitung-2022.pdf"
+    },
+    "electrolux td6 7 waeschetrockner abluftrockner compass pro 7 kg professional": {
+        "source": "https://www.gastrouniversum.de/media/pdf/e3/8f/31/Electrolux-Datenblatt-TD6-7.pdf"
     }
 }
