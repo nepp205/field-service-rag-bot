@@ -56,10 +56,23 @@ async def lifespan(app): #startup event definieren
         api_key=os.environ["AZURE_OPENAI_API_KEY"],
         api_version="2024-02-01",
     )
-    logging.info("Azure OpenAI client initialized.")
-    
+    logging.info("[startup] Azure OpenAI client initialized.")
 
+    logging.info("[startup] Checking Context Handler reachability...")
+    try:
+        result = await test_context_handler_connection(timeout=STARTUP_CONTEXT_CHECK_TIMEOUT)
+        if result.get("ok"):
+            logging.info("[startup] Context Handler reachable (status=%s).", result.get("status_code"))
+        else:
+            logging.warning(
+                "[startup] Context Handler not reachable yet (status=%s, detail=%s). Continuing startup.",
+                result.get("status_code"),
+                result.get("detail"),
+            )
+    except Exception as e:
+        logging.warning("[startup] Context Handler check failed with exception: %s", e)
 
+    logging.info("[startup] Application startup completed.")
     yield #erst jetzt anfragen zulassen (startup abgeschlossen)
   
 
@@ -76,7 +89,21 @@ def test_json():
     else:
         json_filled = False
 
+""" print(json_form,json_filled)
+test_json()
+json_form['problem'] = "problem123"
+print(json_form)
+test_json()
+print(json_form,json_filled)
+json_form['product_model_name'] = "model123"
+json_form['error_code'] = "error123"
+test_json()
+print(json_form,json_filled) """
 
+""" _history.append({
+    "role": "system",
+    "content": "If the user provides problem, product model name or error code, call the tool fill_json_form."
+}) """
 print(_history)
 
 def fill_json_form(problem: str, product_model_name: str, error_code: str):
@@ -251,8 +278,71 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
             return None
 
 
+async def test_context_handler_connection(timeout: float = 3.0) -> dict:
+    """Quick connectivity test for the Context Handler.
+
+    Returns a dict with keys:
+      - ok: bool
+      - status_code: int|None
+      - detail: short message
+      - response: decoded JSON or raw text when available
+
+    This is safe to call during startup or at runtime to verify the
+    CONTEXT_HANDLER_URL and CONTEXT_HANDLER_TOKEN are reachable and
+    returning a valid response.
+    """
+    if not CONTEXT_HANDLER_URL:
+        return {"ok": False, "status_code": None, "detail": "CONTEXT_HANDLER_URL not set"}
+    print("Context handler URL:", CONTEXT_HANDLER_URL)
+    print("Context handler token:", CONTEXT_HANDLER_TOKEN)
+    if not CONTEXT_HANDLER_TOKEN:
+        return {"ok": False, "status_code": None, "detail": "CONTEXT_HANDLER_TOKEN not set"}
+
+    headers = {
+        "Authorization": f"Bearer {CONTEXT_HANDLER_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {"query": "__health_check__"}
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(CONTEXT_HANDLER_URL, headers=headers, json=payload)
+
+        # try to decode JSON response, fall back to text
+        try:
+            content = resp.json()
+        except Exception:
+            content = resp.text
+
+        if resp.status_code == 200:
+            return {"ok": True, "status_code": resp.status_code, "detail": "OK", "response": content}
+        else:
+            print("hierist der fehler")
+            return {"ok": False, "status_code": resp.status_code, "detail": "Non-200 from context handler", "response": content}
+
+    except Exception as exc:
+        print("Context handler connectivity test failed: %s", exc)
+        return {"ok": False, "status_code": None, "detail": str(exc)}
 
 
+def test_context_handler_connection_sync(timeout: float = 3.0) -> dict:
+    """Synchronous wrapper to run the async connectivity test locally.
+
+    Use this when running the module directly (no FastAPI server). It
+    executes the async test with asyncio.run and returns the result dict.
+    """
+    import asyncio
+    return asyncio.run(test_context_handler_connection(timeout=timeout))
+
+
+if __name__ == "__main__":
+    # When executed directly we want a simple local test (no API).
+    result = test_context_handler_connection_sync()
+    try:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    except Exception:
+        # fallback to plain print if JSON serialization fails
+        print(result)
 
 
 @app.post("/api/session/init", response_model=SessionInitResponse) #post endpunkt für neue session
@@ -291,7 +381,17 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     history = _history #vaible für die konversation, startet mit system prompt, wird bei jeder anfrage erweitert
 
-   
+    """ #kontext handler anfragen
+    if JSON_FILLED==True:
+        try:
+            context_text = await fetch_context(req.message, model=req.model)
+            print("Context Handler called")
+        except Exception as e:
+            logging.warning("Error while fetching context: %s", e)
+            context_text = None
+
+        if context_text:
+            history.insert(1, {"role": "system", "content": f"Retrieved context:\n{context_text}"})#context an histroy hängen für llm """
 
     #user prompt an history anhängen (aus frontend)
     history.append({"role": "user", "content": req.message})
@@ -381,7 +481,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
         return ChatResponse(answer=f"Interner Fehler: {type(e).__name__}")
 
 
-
+import os
+import asyncio
+import httpx
 
 async def health_check():
     url = os.getenv("CONTEXT_HANDLER_URL")
