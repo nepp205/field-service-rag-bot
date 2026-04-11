@@ -251,71 +251,8 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
             return None
 
 
-async def test_context_handler_connection(timeout: float = 3.0) -> dict:
-    """Quick connectivity test for the Context Handler.
-
-    Returns a dict with keys:
-      - ok: bool
-      - status_code: int|None
-      - detail: short message
-      - response: decoded JSON or raw text when available
-
-    This is safe to call during startup or at runtime to verify the
-    CONTEXT_HANDLER_URL and CONTEXT_HANDLER_TOKEN are reachable and
-    returning a valid response.
-    """
-    if not CONTEXT_HANDLER_URL:
-        return {"ok": False, "status_code": None, "detail": "CONTEXT_HANDLER_URL not set"}
-    print("Context handler URL:", CONTEXT_HANDLER_URL)
-    print("Context handler token:", CONTEXT_HANDLER_TOKEN)
-    if not CONTEXT_HANDLER_TOKEN:
-        return {"ok": False, "status_code": None, "detail": "CONTEXT_HANDLER_TOKEN not set"}
-
-    headers = {
-        "Authorization": f"Bearer {CONTEXT_HANDLER_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    payload = {"query": "__health_check__"}
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(CONTEXT_HANDLER_URL, headers=headers, json=payload)
-
-        # try to decode JSON response, fall back to text
-        try:
-            content = resp.json()
-        except Exception:
-            content = resp.text
-
-        if resp.status_code == 200:
-            return {"ok": True, "status_code": resp.status_code, "detail": "OK", "response": content}
-        else:
-            print("hierist der fehler")
-            return {"ok": False, "status_code": resp.status_code, "detail": "Non-200 from context handler", "response": content}
-
-    except Exception as exc:
-        print("Context handler connectivity test failed: %s", exc)
-        return {"ok": False, "status_code": None, "detail": str(exc)}
 
 
-def test_context_handler_connection_sync(timeout: float = 3.0) -> dict:
-    """Synchronous wrapper to run the async connectivity test locally.
-
-    Use this when running the module directly (no FastAPI server). It
-    executes the async test with asyncio.run and returns the result dict.
-    """
-    import asyncio
-    return asyncio.run(test_context_handler_connection(timeout=timeout))
-
-
-if __name__ == "__main__":
-    # When executed directly we want a simple local test (no API).
-    result = test_context_handler_connection_sync()
-    try:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-    except Exception:
-        # fallback to plain print if JSON serialization fails
-        print(result)
 
 
 @app.post("/api/session/init", response_model=SessionInitResponse) #post endpunkt für neue session
@@ -454,9 +391,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         return ChatResponse(answer=f"Interner Fehler: {type(e).__name__}")
 
 
-import os
-import asyncio
-import httpx
+
 
 async def health_check():
     url = os.getenv("CONTEXT_HANDLER_URL")
