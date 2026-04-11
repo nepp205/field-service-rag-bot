@@ -10,6 +10,8 @@ Examples:
     python scrape_similar_pdfs.py --query "laborgerät service manual pdf" --update-sources
 """
 
+# Volsständig mit KI erstellen lassen 1 mal Nutzen
+
 from __future__ import annotations
 
 import argparse
@@ -45,7 +47,7 @@ HEADERS = {
 
 SEARCH_DELAY_SECONDS = 1.5
 REQUEST_TIMEOUT_SECONDS = 25
-MAX_RESULTS_PER_QUERY = 8
+MAX_RESULTS_PER_QUERY = 20
 TECHNICAL_KEYWORDS = (
     "pdf",
     "manual",
@@ -118,11 +120,82 @@ def unwrap_search_result_url(href: str) -> str:
     return href
 
 
-def search_duckduckgo(query: str) -> list[dict[str, str]]:
-    """Run a simple public web search and return a few result titles and URLs."""
+def unique_results(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Deduplicate result dictionaries while keeping their original order."""
+    ordered: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+
+    for item in items:
+        url = item.get("url", "").strip()
+        if not url or url in seen_urls:
+            continue
+
+        title = item.get("title", "").strip()
+        if not title:
+            title = Path(urlparse(url).path).stem.replace("-", " ") or url
+
+        ordered.append({"title": title, "url": url})
+        seen_urls.add(url)
+
+    return ordered
+
+
+def build_site_search_terms(query: str, brand: str = "") -> list[str]:
+    """Derive short fallback terms for on-site catalog searches."""
+    stop_words = {
+        "pdf",
+        "manual",
+        "bedienungsanleitung",
+        "gebrauchsanweisung",
+        "service",
+        "technical",
+        "technische",
+        "geräte",
+        "gerate",
+        "gerät",
+        "gerat",
+        "data",
+        "störung",
+        "storung",
+        "fehler",
+        "und",
+        "the",
+    }
+
+    terms: list[str] = []
+    if brand and brand.strip():
+        terms.append(brand.strip())
+
+    words = [
+        word
+        for word in re.findall(r"[a-zA-Z0-9äöüÄÖÜß-]+", query.lower())
+        if len(word) > 2 and word not in stop_words
+    ]
+    if words:
+        terms.append(" ".join(words[:3]))
+        terms.extend(words[:2])
+
+    if not terms and query.strip():
+        terms.append(query.strip())
+
+    seen: set[str] = set()
+    ordered_terms: list[str] = []
+    for term in terms:
+        normalized = term.strip()
+        if normalized and normalized not in seen:
+            ordered_terms.append(normalized)
+            seen.add(normalized)
+    return ordered_terms
+
+
+def search_manualslib(keyword: str) -> list[dict[str, str]]:
+    """Search ManualsLib directly for manual pages when public search engines are blocked."""
+    if not keyword:
+        return []
+
     response = requests.get(
-        "https://duckduckgo.com/html/",
-        params={"q": query},
+        "https://www.manualslib.de/",
+        params={"keyword": keyword},
         headers=HEADERS,
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
@@ -131,15 +204,123 @@ def search_duckduckgo(query: str) -> list[dict[str, str]]:
     soup = BeautifulSoup(response.text, "html.parser")
     results: list[dict[str, str]] = []
 
-    for anchor in soup.select("a.result__a"):
-        url = unwrap_search_result_url(anchor.get("href", ""))
+    generic_titles = {
+        "bedienungsanleitung",
+        "gebrauchsanweisung",
+        "handbuch",
+        "anweisungen",
+        "montageanleitung",
+        "parallelinstallation",
+    }
+
+    for anchor in soup.select('a[href*="/manual/"]'):
+        absolute = urljoin(response.url, anchor.get("href", "").strip())
+        if not absolute:
+            continue
+
+        domain = urlparse(absolute).netloc.lower()
+        if domain not in ALLOWED_DOMAINS:
+            continue
+
         title = anchor.get_text(" ", strip=True)
-        if url and title:
-            results.append({"title": title, "url": url})
+        if not title or title.lower() in generic_titles:
+            title = Path(urlparse(absolute).path).stem.replace("-", " ")
+
+        results.append({"title": f"ManualsLib: {title}", "url": absolute})
         if len(results) >= MAX_RESULTS_PER_QUERY:
             break
 
-    return results
+    return unique_results(results)
+
+
+def search_gastrouniversum(keyword: str) -> list[dict[str, str]]:
+    """Search Gastrouniversum product pages that frequently expose direct PDF manuals."""
+    if not keyword:
+        return []
+
+    response = requests.get(
+        "https://www.gastrouniversum.de/search",
+        params={"sSearch": keyword},
+        headers=HEADERS,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    results: list[dict[str, str]] = []
+    keyword_tokens = {token for token in re.findall(r"[a-zA-Z0-9äöüÄÖÜß-]+", keyword.lower()) if len(token) > 2}
+
+    for anchor in soup.select("a[href]"):
+        absolute = urljoin(response.url, anchor.get("href", "").strip())
+        if not absolute:
+            continue
+
+        parsed = urlparse(absolute)
+        domain = parsed.netloc.lower()
+        if domain not in ALLOWED_DOMAINS:
+            continue
+
+        if absolute.lower().endswith(".pdf"):
+            title = anchor.get_text(" ", strip=True) or Path(parsed.path).stem.replace("-", " ")
+            results.append({"title": title, "url": absolute})
+        else:
+            if parsed.path.startswith("/search") or not re.search(r"/\d{3,}/", parsed.path):
+                continue
+
+            title = anchor.get_text(" ", strip=True) or Path(parsed.path).stem.replace("-", " ")
+            haystack = f"{title} {absolute}".lower()
+            if keyword_tokens and not any(token in haystack for token in keyword_tokens):
+                continue
+
+            results.append({"title": title, "url": absolute})
+
+        if len(results) >= MAX_RESULTS_PER_QUERY:
+            break
+
+    return unique_results(results)
+
+
+def search_duckduckgo(query: str, brand: str = "") -> list[dict[str, str]]:
+    """Run a public web search and fall back to site-native catalog searches if blocked."""
+    results: list[dict[str, str]] = []
+
+    try:
+        response = requests.get(
+            "https://duckduckgo.com/html/",
+            params={"q": query},
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+
+        blocked_text = response.text.lower()
+        if response.status_code != 202 and "bots use duckduckgo too" not in blocked_text:
+            soup = BeautifulSoup(response.text, "html.parser")
+            for anchor in soup.select("a.result__a, a.result-link"):
+                url = unwrap_search_result_url(anchor.get("href", ""))
+                title = anchor.get_text(" ", strip=True)
+                if url and title:
+                    results.append({"title": title, "url": url})
+                if len(results) >= MAX_RESULTS_PER_QUERY:
+                    break
+    except requests.RequestException:
+        results = []
+
+    if results:
+        return unique_results(results)
+
+    for term in build_site_search_terms(query, brand):
+        for search_fn in (search_manualslib, search_gastrouniversum):
+            try:
+                results.extend(search_fn(term))
+            except requests.RequestException:
+                continue
+
+        deduplicated = unique_results(results)
+        if len(deduplicated) >= MAX_RESULTS_PER_QUERY:
+            return deduplicated[:MAX_RESULTS_PER_QUERY]
+
+    return unique_results(results)[:MAX_RESULTS_PER_QUERY]
 
 
 def is_technical_manual_candidate(title: str, url: str) -> bool:
@@ -208,6 +389,55 @@ def download_pdf(url: str, destination_dir: Path, preferred_name: str | None = N
     return output_path
 
 
+def canonicalize_url(url: str) -> str:
+    """Normalize URLs so the same PDF is not downloaded repeatedly."""
+    parsed = urlparse(url.strip())
+    return parsed._replace(query="", fragment="").geturl()
+
+
+def normalize_identifier(value: str) -> str:
+    """Normalize titles/file names to detect duplicates across runs."""
+    stem = Path(value).stem
+    stem = re.sub(r"_\d+$", "", stem)
+    return re.sub(r"[^a-z0-9]+", "", stem.lower())
+
+
+def collect_known_downloads() -> tuple[set[str], set[str], dict[str, dict[str, str]]]:
+    """Read known sources and local PDF names so only new manuals are fetched."""
+    source_map = load_sources_for_update()
+    known_urls: set[str] = set()
+    known_names: set[str] = set()
+
+    for name, meta in source_map.items():
+        known_names.add(normalize_identifier(name))
+        if isinstance(meta, dict):
+            source = (meta.get("source") or "").strip()
+            if source:
+                known_urls.add(canonicalize_url(source))
+
+    if PDF_DIR.exists():
+        for pdf_path in PDF_DIR.glob("*.pdf"):
+            known_names.add(normalize_identifier(pdf_path.stem))
+
+    return known_urls, known_names, source_map
+
+
+def update_source_map(source_map: dict[str, dict[str, str]], name: str, source_url: str) -> None:
+    """Insert or refresh a source entry without creating normalized duplicates."""
+    normalized_name = normalize_identifier(name)
+    canonical_source = canonicalize_url(source_url)
+
+    for existing_name, meta in source_map.items():
+        if normalize_identifier(existing_name) == normalized_name:
+            if not isinstance(meta, dict):
+                source_map[existing_name] = {"source": canonical_source}
+            else:
+                meta["source"] = canonical_source
+            return
+
+    source_map[name] = {"source": canonical_source}
+
+
 def load_sources_for_update() -> dict[str, dict[str, str]]:
     """Load `pdf_sources.json` only when we want to append new downloads."""
     if not SOURCES_JSON.exists():
@@ -226,75 +456,141 @@ def maybe_update_sources_json(source_map: dict[str, dict[str, str]]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Find and download additional technical PDF manuals.")
     parser.add_argument("--dry-run", action="store_true", help="Only print candidates; do not download anything.")
-    parser.add_argument("--max-downloads", type=int, default=5, help="Maximum number of new PDFs to download.")
+    parser.add_argument(
+        "--max-downloads",
+        type=int,
+        default=0,
+        help="Maximum number of new PDFs to download. 0 means unlimited until you stop the scraper.",
+    )
     parser.add_argument("--brand", default="miele", help="Optional brand or vendor name to focus the search on.")
     parser.add_argument("--query", action="append", help="Optional extra search query. Can be used multiple times.")
-    parser.add_argument("--update-sources", action="store_true", help="Write newly downloaded sources back to pdf_sources.json.")
+    parser.add_argument(
+        "--no-update-sources",
+        action="store_true",
+        help="Do not write discovered sources back to pdf_sources.json.",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run only one search round and then exit. Default behavior keeps running until you stop it.",
+    )
+    parser.add_argument(
+        "--loop-delay",
+        type=int,
+        default=120,
+        help="Seconds to wait between rounds in continuous mode.",
+    )
     args = parser.parse_args()
 
     PDF_DIR.mkdir(parents=True, exist_ok=True)
-    source_json = load_sources_for_update() if args.update_sources else {}
+    known_urls, known_names, source_json = collect_known_downloads()
     queries = build_search_queries(args.brand, args.query)
+    should_update_sources = not args.dry_run and not args.no_update_sources
 
     downloaded = 0
-    seen_urls: set[str] = set()
+    cycle = 0
 
     print("[Info] Der Scraper arbeitet unabhängig von der vorhandenen PDF-Sammlung.")
     print(f"[Info] {len(queries)} Suchanfragen vorbereitet")
+    print(f"[Info] Bereits bekannte PDFs/Quellen werden übersprungen: {len(known_names)} Namen, {len(known_urls)} URLs")
+    if should_update_sources:
+        print("[Info] `pdf_sources.json` wird automatisch aktualisiert.")
+    if not args.once and not args.dry_run:
+        print(f"[Info] Kontinuierlicher Modus aktiv. Stoppen mit Strg+C. Wartezeit: {args.loop_delay}s")
 
-    for query in queries:
-        if downloaded >= args.max_downloads:
-            break
+    try:
+        while True:
+            cycle += 1
+            cycle_downloaded = 0
+            seen_urls: set[str] = set()
 
-        print(f"\n[Search] {query}")
-        try:
-            results = search_duckduckgo(query)
-        except requests.RequestException as exc:
-            print(f"  -> Suche fehlgeschlagen: {exc}")
-            continue
+            print(f"\n[Cycle] Runde {cycle}")
 
-        for result in results:
-            if downloaded >= args.max_downloads:
-                break
-
-            domain = urlparse(result["url"]).netloc.lower()
-            if domain and domain not in ALLOWED_DOMAINS and not result["url"].lower().endswith(".pdf"):
-                continue
-
-            if not is_technical_manual_candidate(result["title"], result["url"]):
-                continue
-
-            pdf_links = [result["url"]] if result["url"].lower().endswith(".pdf") else extract_pdf_links(result["url"])
-
-            for pdf_url in pdf_links:
-                if pdf_url in seen_urls:
-                    continue
-                seen_urls.add(pdf_url)
-
-                pretty_title = result["title"].strip() or Path(urlparse(pdf_url).path).stem
-                safe_name = sanitize_filename(pretty_title)
-                print(f"  -> Kandidat: {pretty_title}")
-                print(f"     URL: {pdf_url}")
-
-                if args.dry_run:
-                    downloaded += 1
+            for query in queries:
+                if args.max_downloads > 0 and downloaded >= args.max_downloads:
                     break
 
-                output = download_pdf(pdf_url, PDF_DIR, preferred_name=f"{safe_name}.pdf")
-                if output is None:
-                    print("     Download übersprungen (kein direktes PDF oder nicht erreichbar).")
+                print(f"\n[Search] {query}")
+                try:
+                    results = search_duckduckgo(query, args.brand)
+                except requests.RequestException as exc:
+                    print(f"  -> Suche fehlgeschlagen: {exc}")
                     continue
 
-                downloaded += 1
-                print(f"     Gespeichert als: {output.name}")
+                for result in results:
+                    if args.max_downloads > 0 and downloaded >= args.max_downloads:
+                        break
 
-                if args.update_sources:
-                    source_json[Path(output.name).stem] = {"source": pdf_url}
+                    domain = urlparse(result["url"]).netloc.lower()
+                    if domain and domain not in ALLOWED_DOMAINS and not result["url"].lower().endswith(".pdf"):
+                        continue
+
+                    if not is_technical_manual_candidate(result["title"], result["url"]):
+                        continue
+
+                    pdf_links = [result["url"]] if result["url"].lower().endswith(".pdf") else extract_pdf_links(result["url"])
+
+                    for pdf_url in pdf_links:
+                        canonical_pdf_url = canonicalize_url(pdf_url)
+                        if canonical_pdf_url in seen_urls or canonical_pdf_url in known_urls:
+                            continue
+                        seen_urls.add(canonical_pdf_url)
+
+                        pretty_title = result["title"].strip() or Path(urlparse(pdf_url).path).stem
+                        safe_name = sanitize_filename(pretty_title)
+                        normalized_name = normalize_identifier(safe_name)
+                        if normalized_name in known_names:
+                            print(f"  -> Übersprungen (bereits vorhanden): {pretty_title}")
+                            known_urls.add(canonical_pdf_url)
+                            if should_update_sources:
+                                update_source_map(source_json, safe_name, canonical_pdf_url)
+                                maybe_update_sources_json(source_json)
+                            continue
+
+                        print(f"  -> Kandidat: {pretty_title}")
+                        print(f"     URL: {pdf_url}")
+
+                        if args.dry_run:
+                            downloaded += 1
+                            cycle_downloaded += 1
+                            known_urls.add(canonical_pdf_url)
+                            known_names.add(normalized_name)
+                            break
+
+                        output = download_pdf(pdf_url, PDF_DIR, preferred_name=f"{safe_name}.pdf")
+                        if output is None:
+                            print("     Download übersprungen (kein direktes PDF oder nicht erreichbar).")
+                            continue
+
+                        downloaded += 1
+                        cycle_downloaded += 1
+                        known_urls.add(canonical_pdf_url)
+                        known_names.add(normalize_identifier(output.stem))
+                        print(f"     Gespeichert als: {output.name}")
+
+                        if should_update_sources:
+                            update_source_map(source_json, Path(output.name).stem, canonical_pdf_url)
+                            maybe_update_sources_json(source_json)
+                        break
+
+                time.sleep(SEARCH_DELAY_SECONDS)
+
+            if args.max_downloads > 0 and downloaded >= args.max_downloads:
                 break
 
-        time.sleep(SEARCH_DELAY_SECONDS)
+            if args.dry_run or args.once:
+                break
 
-    if args.update_sources and not args.dry_run:
+            print(
+                f"\n[Wait] Runde {cycle} abgeschlossen. Neue Kandidaten/Downloads: {cycle_downloaded}. "
+                f"Nächster Durchlauf in {args.loop_delay} Sekunden..."
+            )
+            time.sleep(max(args.loop_delay, 1))
+
+    except KeyboardInterrupt:
+        print("\n[Stop] Vom Benutzer beendet.")
+
+    if should_update_sources:
         maybe_update_sources_json(source_json)
         print("\n[Done] pdf_sources.json wurde aktualisiert.")
 
