@@ -22,8 +22,11 @@ qdrant_key = os.getenv("QDRANT_API_KEY")
 COLLECTION_NAME = "Manuals_pdfs"
 # COLLECTION_NAME = "Dev_Test"
 
-BATCH_SIZE = 50
 PDF_SOURCES_PATH = Path(__file__).resolve().parent / "pdf_sources.json"
+
+BATCH_SIZE = 50
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 125
 
 def load_pdf_sources() -> dict[str, str]:
     """Lädt die PDF-Links aus der JSON-Datei anhand des Dateinamens ohne Endung."""
@@ -67,8 +70,8 @@ for doc in docs:
 
 # 2. Text in Nodes zerlegen
 node_parser = SimpleNodeParser.from_defaults(
-    chunk_size=800,
-    chunk_overlap=150
+    chunk_size=CHUNK_SIZE,
+    chunk_overlap=CHUNK_OVERLAP
 )
 
 nodes = node_parser.get_nodes_from_documents(docs)
