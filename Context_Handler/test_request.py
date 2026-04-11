@@ -12,7 +12,7 @@ SECRET_TOKEN = os.getenv("WEBSERVER_TOKEN")
 url = "http://localhost:5000/context"
 token = SECRET_TOKEN
 headers = {
-    "Authorization": f"Bearer {token}",
+    "Authorization": f"Bearer {token}",  # Token des webservers für Authentifizierung
     "Content-Type": "application/json"
 }
 data = {

@@ -25,7 +25,7 @@ COLLECTION_NAME = "Manuals_pdfs"
 PDF_SOURCES_PATH = Path(__file__).resolve().parent / "pdf_sources.json"
 
 BATCH_SIZE = 50
-CHUNK_SIZE = 500
+CHUNK_SIZE = 800
 CHUNK_OVERLAP = 125
 
 def load_pdf_sources() -> dict[str, str]:
@@ -49,7 +49,6 @@ print("Lade PDFs...")
 loader = SimpleDirectoryReader("field-service-rag-bot/Context_Handler/pdfs/")
 docs = loader.load_data()
 print(docs[0].text[:1000])
-
 print(f"{len(docs)} Dokumente geladen")
 
 # Text-Preprocessing
@@ -75,7 +74,7 @@ node_parser = SimpleNodeParser.from_defaults(
 )
 
 nodes = node_parser.get_nodes_from_documents(docs)
-# print(f"{len(nodes)} Nodes erstellt")
+print(f"{len(nodes)} Nodes erstellt")
 # print(nodes[0].get_content()[:1000])
 
 # 3. Embeddings-Modell
