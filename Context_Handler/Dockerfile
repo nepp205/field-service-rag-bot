@@ -44,8 +44,8 @@ COPY warm_model_cache.py ./
 # Gunicorn für Production
 RUN pip install --no-cache-dir gunicorn==21.2.0
 
-EXPOSE 5000  # Läuft auf Port 5000
-
+# Läuft auf Port 5000
+EXPOSE 5000  
 # Erst Cache-Volume prüfen/befüllen, dann Webserver starten.
 CMD ["sh", "-c", "python /app/warm_model_cache.py && exec gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 4 --worker-class gthread --timeout 300 --max-requests 1000 Context_Webserver:webserver"]
 # Gunicorn sorgt mit Worker Prozessen die eine Fork von Master prozessen sind für ständige verügbarkeit und die Verarbeitung von mehreren Anfragen gelichzeitig
