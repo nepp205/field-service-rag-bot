@@ -5,31 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Field Service RAG Bot</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Bundled locally so Docker containers work without internet access -->
+    <!-- Lokal gebundelt damit Docker ohne Internet funktioniert -->
     <script src="marked.umd.js"></script>
     <script src="purify.min.js"></script>
-    <!-- script.js is deferred so the DOM is ready before JS runs -->
+    <!-- defer: JS läuft erst wenn DOM fertig ist -->
     <script src="script.js" defer></script>
 </head>
 <body>
     <h1>Welcome to the Field Service RAG Bot</h1>
     <p>This is a simple web interface for interacting with the RAG bot.</p>
 
-    <!-- Light/dark theme toggle + TTS toggle buttons (top of page) -->
+    <!-- Theme- und TTS-Buttons oben rechts (fixed) -->
     <div class="controls">
         <button id="tts-toggle" title="Text-to-Speech">🔇</button>
         <button id="theme-toggle" title="Dark/Light Mode">☀️</button>
     </div>
 
-    <!-- Main chat shell -->
+    <!-- Chat-Bereich -->
     <div id="chat-container">
 
-        <!-- Scrollable message list; the scroll-to-bottom button overlays it -->
+        <!-- Scrollbare Nachrichtenliste mit Scroll-Button -->
         <div id="chat-box">
             <button id="scroll-down-btn" title="Zum Neuesten">⬇</button>
         </div>
 
-        <!-- Input row: text field + mic button + send button -->
+        <!-- Eingabezeile: Textfeld + Mikrofon + Senden -->
         <div class="input-area">
             <input type="text" id="user-input" placeholder="Type your message here...">
             <button id="mic-button" title="Spracheingabe">🎤</button>

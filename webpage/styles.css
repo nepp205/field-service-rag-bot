@@ -1,11 +1,6 @@
-/* ==========================================================================
-   styles.css – Field-Service RAG Bot
-   Mobile-first, clean vertical layout.
-   ========================================================================== */
+/* Styles – Field-Service RAG Bot */
 
-/* --------------------------------------------------------------------------
-   CSS custom properties (design tokens)
-   -------------------------------------------------------------------------- */
+/* Design-Variablen (helles Theme) */
 :root {
     --bg: #f0f2f8;
     --card: #ffffff;
@@ -21,14 +16,10 @@
     --border: rgba(15,23,42,0.10);
 }
 
-/* --------------------------------------------------------------------------
-   Global reset
-   -------------------------------------------------------------------------- */
+/* Globaler Reset */
 * { box-sizing: border-box; }
 
-/* --------------------------------------------------------------------------
-   Base layout – full-height page, vertically stacked and centred
-   -------------------------------------------------------------------------- */
+/* Grundlayout – ganze Seite, zentriert */
 html, body {
     height: 100vh;
     margin: 0;
@@ -47,9 +38,7 @@ body {
     overflow: hidden;
 }
 
-/* --------------------------------------------------------------------------
-   Page title & intro text
-   -------------------------------------------------------------------------- */
+/* Seitentitel */
 h1 {
     margin: 10px 0 4px 0;
     font-size: 1.4rem;
@@ -66,9 +55,7 @@ p {
     flex-shrink: 0;
 }
 
-/* --------------------------------------------------------------------------
-   Chat shell – card that contains the message list and input row
-   -------------------------------------------------------------------------- */
+/* Chat-Container (Karte) */
 #chat-container {
     width: 100%;
     max-width: 920px;
@@ -83,9 +70,7 @@ p {
     height: 0;
 }
 
-/* --------------------------------------------------------------------------
-   Chat box – scrollable message list
-   -------------------------------------------------------------------------- */
+/* Scrollbare Nachrichtenliste */
 #chat-box {
     position: relative;
     width: 100%;
@@ -101,9 +86,7 @@ p {
     flex: 1;
 }
 
-/* --------------------------------------------------------------------------
-   Message bubbles
-   -------------------------------------------------------------------------- */
+/* Nachrichten-Blasen */
 .message {
     display: flex;
     gap: 10px;
@@ -121,7 +104,7 @@ p {
     font-size: 0.95rem;
 }
 
-/* User messages: right-aligned */
+/* Nutzer-Nachrichten rechts */
 .message.user {
     justify-content: flex-end;
 }
@@ -132,7 +115,7 @@ p {
     border-bottom-right-radius: 4px;
 }
 
-/* Bot messages: left-aligned, stacked vertically */
+/* Bot-Nachrichten links */
 .message.bot {
     justify-content: flex-start;
     flex-direction: column;
@@ -148,10 +131,7 @@ p {
     text-align: left;
 }
 
-/* --------------------------------------------------------------------------
-   Markdown content inside bot bubbles
-   Scope every rule under .message.bot .bubble to avoid leaking styles.
-   -------------------------------------------------------------------------- */
+/* Markdown-Styles innerhalb Bot-Blasen */
 .message.bot .bubble > :first-child { margin-top: 0; }
 .message.bot .bubble > :last-child  { margin-bottom: 0; }
 
@@ -256,9 +236,7 @@ p {
     font-weight: 600;
 }
 
-/* --------------------------------------------------------------------------
-   Source-document collapsible panel
-   -------------------------------------------------------------------------- */
+/* Quelldokument-Panel (ausklappbar) */
 .source-toggle {
     font-size: 0.85rem;
     color: var(--accent);
@@ -288,16 +266,7 @@ p {
     border-radius: 4px;
 }
 
-/* Meta text */
-.meta {
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 6px;
-}
-
-/* --------------------------------------------------------------------------
-   Input area – text field, mic button, send button
-   -------------------------------------------------------------------------- */
+/* Eingabebereich */
 .input-area {
     display: flex;
     gap: 8px;
@@ -350,9 +319,7 @@ p {
     cursor: not-allowed;
 }
 
-/* --------------------------------------------------------------------------
-   Mic button
-   -------------------------------------------------------------------------- */
+/* Mikrofon-Button */
 #mic-button {
     font-size: 1.15em;
     background: var(--accent);
@@ -373,9 +340,7 @@ p {
     background: #1d4ed8;
 }
 
-/* --------------------------------------------------------------------------
-   Controls row – theme toggle + TTS toggle buttons (top of page)
-   -------------------------------------------------------------------------- */
+/* Steuerleiste (Theme + TTS oben rechts) */
 .controls {
     display: flex;
     gap: 8px;
@@ -407,50 +372,7 @@ p {
     background: rgba(37,99,235,0.08);
 }
 
-/* --------------------------------------------------------------------------
-   Typing indicator
-   -------------------------------------------------------------------------- */
-.typing-indicator {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 12px;
-    background: var(--bot);
-    border-radius: 18px;
-    border-bottom-left-radius: 6px;
-    max-width: 80%;
-}
-
-.typing-dots {
-    display: flex;
-    gap: 4px;
-}
-
-.typing-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: rgba(15,23,42,0.4);
-    animation: typing-bounce 1.4s infinite ease-in-out;
-}
-
-.typing-dot:nth-child(2) { animation-delay: 0.2s; }
-.typing-dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes typing-bounce {
-    0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-    40%           { transform: scale(1.2); opacity: 1;   }
-}
-
-.typing-text {
-    font-size: 0.9rem;
-    color: var(--text);
-    margin-left: 4px;
-}
-
-/* --------------------------------------------------------------------------
-   Scroll-to-bottom floating button
-   -------------------------------------------------------------------------- */
+/* Scroll-nach-unten-Button */
 #scroll-down-btn {
     position: fixed;
     bottom: 210px;
@@ -482,9 +404,7 @@ p {
     color: #ffffff;
 }
 
-/* --------------------------------------------------------------------------
-   Responsive breakpoints
-   -------------------------------------------------------------------------- */
+/* Responsive Anpassungen */
 @media (max-width: 600px) {
     body { padding: 12px; }
     h1   { font-size: 1.15rem; }
@@ -503,9 +423,7 @@ p {
     #chat-box        { min-height: 420px; }
 }
 
-/* --------------------------------------------------------------------------
-   Dark mode overrides
-   -------------------------------------------------------------------------- */
+/* Dunkles Theme */
 [data-theme="dark"] {
     --bg:           #0f172a;
     --card:         #1e293b;
@@ -546,4 +464,3 @@ p {
 [data-theme="dark"] h1 {
     color: #f1f5f9;
 }
-
