@@ -47,7 +47,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Code kopieren
-COPY context_webserver.py ./
+COPY Context_Webserver.py ./
 COPY Context_Handler.py ./
 COPY rag.py ./
 COPY warm_model_cache.py ./
