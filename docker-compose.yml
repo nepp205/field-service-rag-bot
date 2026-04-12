@@ -22,7 +22,6 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./Context_Handler/pdfs:/app/pdfs
       - hf_cache:/opt/hf-cache
     environment:
       - FLASK_APP=Context_Webserver.py

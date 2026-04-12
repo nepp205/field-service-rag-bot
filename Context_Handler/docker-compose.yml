@@ -24,8 +24,6 @@ services:
       - HF_TOKEN=${HF_TOKEN}
       - WEBSERVER_TOKEN=${WEBSERVER_TOKEN}
     restart: unless-stopped
-    networks:
-      - rag-network
     # Memory und CPU Limits
     deploy:
       resources:
@@ -33,10 +31,6 @@ services:
           memory: 8G
         reservations:
           memory: 4G
-
-networks:
-  rag-network:
-    driver: bridge
 
 # wichtig es muss erst einmal über das root compose das Volume erstellt werden
 # Also muss initial erstmal das darüberliegende compose ausgeführt werden
