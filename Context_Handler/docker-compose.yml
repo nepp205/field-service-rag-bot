@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: rag-bot-app
-    runtime: runc
+    runtime: runc   # festgelegt weil es runtime Konflikte gab
     ports:
       - "5000:5000"
     volumes:
