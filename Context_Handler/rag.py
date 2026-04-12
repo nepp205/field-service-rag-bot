@@ -29,7 +29,7 @@ else:
 # Zentrale Konfiguration für Collection, Retrieval und Dokumentabgleich
 COLLECTION_NAME = "Manuals_pdfs"
 # COLLECTION_NAME = "Dev_Test"
-SIMILARITY_TOP_RES = 20                # bei Tests sind bisher nur die ersten 3 bis 5 oder 6 zurückgegebenen Text chunks relevant gewesen
+SIMILARITY_TOP_RES = 15             # hohe Anzahl um auch scheinbar unbedeutenden Kontext abzudecken
 SIMILARITY_CUTOFF = 0.5             # Score relativ hoch da die Inhalte sehr ähnlich sind
 DOCUMENT_MATCH_THRESHOLD = 0.80
 DOCUMENT_CATALOG_TTL_SECONDS = 300
@@ -239,7 +239,7 @@ def get_context(query: str, model: str = None) -> str:
         if extract_payload_text(point.payload or {})
     )
 
-    total_seconds = time.perf_counter() - total_start
+    total_seconds = time.perf_counter() - total_start               # Ausgabe der Zeiten
     print(
         "[METRIC] "
         f"resolve_model_seconds={model_resolve_seconds:.3f} "
