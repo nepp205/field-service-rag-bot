@@ -26,7 +26,7 @@ PDF_SOURCES_PATH = Path(__file__).resolve().parent / "pdf_sources.json"
 
 BATCH_SIZE = 50
 CHUNK_SIZE = 800
-CHUNK_OVERLAP = 125
+CHUNK_OVERLAP = 150
 
 def load_pdf_sources() -> dict[str, str]:
     """Lädt die PDF-Links aus der JSON-Datei anhand des Dateinamens ohne Endung."""
