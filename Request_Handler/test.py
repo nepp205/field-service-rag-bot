@@ -1,38 +1,27 @@
-#Erstellt nach Anleitung von Azure OpenAI SDK Dokumentation, angepasst von mir (Niklas) für die Verwendung mit Azure OpenAI Service.
-#nur zum testen der Verbindung und der Anfragen an das Modell, wird nicht im finalen Code benötigt
-from openai import OpenAI
+# Nur zum Testen der Azure OpenAI Verbindung – wird nicht im produktiven Code verwendet
+# Erstellt nach Azure OpenAI SDK Dokumentation, angepasst von Niklas
+
 import os
-#Umgebungsvariablen aus .env laden, falls vorhanden (lokale Entwicklung)
+from openai import AzureOpenAI
+
 try:
     from dotenv import load_dotenv
-
-    load_dotenv()
+    load_dotenv()  # .env laden falls vorhanden (lokale entwicklung)
 except Exception:
     pass
 
-
-
-#Deklaration der benötigten Umgebungsvariablen
-endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-deployment_name = "gpt-4o-mini-main"
-api_key = os.getenv("AZURE_OPENAI_API_KEY")
-MAX_TOKENS = 100
-
-# Initialisierung des OpenAI-Clients mit den Azure-spezifischen Parametern
-client = OpenAI(
-    base_url=endpoint,
-    api_key=api_key
+# verbindungsdaten aus umgebungsvariablen
+client = AzureOpenAI(
+    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    api_key=os.environ["AZURE_OPENAI_API_KEY"],
+    api_version="2024-02-01",
 )
 
-# Testanfrage an die Chat-Completions-API mit einem einfachen Prompt, um die Verbindung zu überprüfen.
-completion = client.chat.completions.create(
-    model=deployment_name,
-    messages=[
-        {
-            "role": "user",
-            "content": "What is the capital of France?",
-        }
-    ],
+# testanfrage um verbindung zu prüfen
+response = client.chat.completions.create(
+    model="gpt-4o-mini-main",
+    messages=[{"role": "user", "content": "What is the capital of France?"}],
+    max_tokens=100,
 )
 
-print(completion.choices[0].message)
+print(response.choices[0].message.content)

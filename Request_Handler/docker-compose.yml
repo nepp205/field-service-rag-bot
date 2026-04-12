@@ -1,4 +1,4 @@
-# Von Github Copilot generiert, angepasst von mir(Niklas)
+# Von GitHub Copilot generiert, angepasst von Niklas
 services:
   request-handler:
     build:
@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
     container_name: request-handler-cont
     ports:
-      - "8000:8000"
+      - "8000:8000"  # port nach außen freigeben
     env_file:
-      - .env
-    restart: unless-stopped
+      - .env  # umgebungsvariablen aus datei laden
+    restart: unless-stopped  # automatisch neustarten außer bei manuellem stopp
