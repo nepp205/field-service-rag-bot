@@ -1,7 +1,7 @@
 # gehört zu Context_Handler
 # Das Context_Handler directory wurde vollständig von Marvin Palsbröker erstellt
 
-# Mit KI erstellt und abgestimmt (Github Copilot)
+# Mit KI ausgebessert (Github Copilot)
 
 # Für Docker bewusst gepinnt, damit keine unerwarteten CUDA/NVIDIA-Abhängigkeiten gezogen werden.
 --extra-index-url https://download.pytorch.org/whl/cpu
