@@ -19,7 +19,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Python Einstellungen
+# Python Einstellungen und Umgebungsvariablen Pfade
 ENV FLASK_APP=context_webserver.py \
     FLASK_ENV=production \
     PYTHONUNBUFFERED=1 \
