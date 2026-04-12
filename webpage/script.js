@@ -1,108 +1,108 @@
 // Hell/Dunkel-Modus umschalten
 document.getElementById('theme-toggle').onclick = () => {
-    const dunkel = document.documentElement.dataset.theme === 'dark';
-    document.documentElement.dataset.theme = dunkel ? 'light' : 'dark';
-    document.getElementById('theme-toggle').textContent = dunkel ? '🌙' : '☀️';
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    document.documentElement.dataset.theme = isDark ? 'light' : 'dark';
+    document.getElementById('theme-toggle').textContent = isDark ? '🌙' : '☀️';
 };
 
 // Sprachausgabe (TTS) ein-/ausschalten
-let ttsAktiv = false;
+let ttsEnabled = false;
 
 document.getElementById('tts-toggle').onclick = () => {
-    ttsAktiv = !ttsAktiv;
-    document.getElementById('tts-toggle').textContent = ttsAktiv ? '🔊' : '🔇';
-    if (!ttsAktiv) speechSynthesis.cancel(); // laufende Ausgabe stoppen
+    ttsEnabled = !ttsEnabled;
+    document.getElementById('tts-toggle').textContent = ttsEnabled ? '🔊' : '🔇';
+    if (!ttsEnabled) speechSynthesis.cancel(); // laufende Ausgabe stoppen
 };
 
 
 document.addEventListener('DOMContentLoaded', () => {
     // DOM-Elemente holen
-    const sendeBtn  = document.getElementById('send-button');
-    const eingabe   = document.getElementById('user-input');
-    const mikBtn    = document.getElementById('mic-button');
-    const chatBox   = document.getElementById('chat-box');
-    const scrollBtn = document.getElementById('scroll-down-btn');
+    const sendBtn       = document.getElementById('send-button');
+    const userInput     = document.getElementById('user-input');
+    const micBtn        = document.getElementById('mic-button');
+    const chatBox       = document.getElementById('chat-box');
+    const scrollDownBtn = document.getElementById('scroll-down-btn');
 
-    if (!eingabe || !chatBox) return; // Abbruch wenn Pflicht-Elemente fehlen
+    if (!userInput || !chatBox) return; // Abbruch wenn Pflicht-Elemente fehlen
 
     // Scroll-Button ein-/ausblenden je nach Position
-    function scrollPruefen() {
-        const amEnde = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 1;
-        scrollBtn.classList.toggle('show', !amEnde);
+    function checkScrollPosition() {
+        const isAtBottom = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 1;
+        scrollDownBtn.classList.toggle('show', !isAtBottom);
     }
 
     // Sanft zum Ende der Chat-Liste scrollen
-    function scrollNachUnten() {
+    function scrollToBottom() {
         chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: 'smooth' });
-        scrollBtn.classList.remove('show');
+        scrollDownBtn.classList.remove('show');
     }
 
-    scrollBtn?.addEventListener('click', scrollNachUnten);
-    chatBox.addEventListener('scroll', scrollPruefen);
-    const beobachter = new MutationObserver(scrollPruefen);
-    beobachter.observe(chatBox, { childList: true, subtree: true }); // bei neuen Nachrichten prüfen
+    scrollDownBtn?.addEventListener('click', scrollToBottom);
+    chatBox.addEventListener('scroll', checkScrollPosition);
+    const observer = new MutationObserver(checkScrollPosition);
+    observer.observe(chatBox, { childList: true, subtree: true }); // bei neuen Nachrichten prüfen
 
     // Spracheingabe (STT) einrichten
-    let erkennung;
+    let recognition;
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        erkennung = new SpeechRecognition();
-        erkennung.continuous     = false; // stoppt nach erster Aussage
-        erkennung.interimResults = true;  // Zwischenergebnisse erlaubt
-        erkennung.lang           = 'de-DE';
-        erkennung.onresult = (e) => { eingabe.value = e.results[0][0].transcript; }; // Text ins Eingabefeld schreiben
-        erkennung.onerror  = (e) => { console.error('Sprachfehler:', e.error); };
+        recognition = new SpeechRecognition();
+        recognition.continuous     = false; // stoppt nach erster Aussage
+        recognition.interimResults = true;  // Zwischenergebnisse erlaubt
+        recognition.lang           = 'de-DE';
+        recognition.onresult = (event) => { userInput.value = event.results[0][0].transcript; }; // Text ins Eingabefeld schreiben
+        recognition.onerror  = (event) => { console.error('Speech Error:', event.error); };
     }
 
-    if (mikBtn) {
-        mikBtn.addEventListener('click', () => {
-            if (erkennung) {
-                erkennung.start();
-                mikBtn.textContent = '⏹️'; // Aufnahme läuft
+    if (micBtn) {
+        micBtn.addEventListener('click', () => {
+            if (recognition) {
+                recognition.start();
+                micBtn.textContent = '⏹️'; // Aufnahme läuft
             } else {
                 alert('Spracherkennung nicht unterstützt (Chrome/Edge/Safari)');
             }
         });
-        erkennung?.addEventListener('end', () => { mikBtn.textContent = '🎤'; }); // Icon zurücksetzen
+        recognition?.addEventListener('end', () => { micBtn.textContent = '🎤'; }); // Icon zurücksetzen
     }
 
     // Text über Web Speech API vorlesen
-    function vorlesen(text) {
-        if (!ttsAktiv || !('speechSynthesis' in window)) return;
+    function speak(text) {
+        if (!ttsEnabled || !('speechSynthesis' in window)) return;
         speechSynthesis.cancel(); // vorherige Ausgabe abbrechen
-        const sprecher  = new SpeechSynthesisUtterance(text);
-        sprecher.lang   = 'de-DE';
-        sprecher.rate   = 0.9;
-        sprecher.pitch  = 1.0;
-        sprecher.volume = 0.8;
+        const utterance  = new SpeechSynthesisUtterance(text);
+        utterance.lang   = 'de-DE';
+        utterance.rate   = 0.9;
+        utterance.pitch  = 1.0;
+        utterance.volume = 0.8;
         // Deutsche Stimme bevorzugen wenn vorhanden
-        const stimme = speechSynthesis.getVoices().find(v =>
+        const germanVoice = speechSynthesis.getVoices().find(v =>
             v.lang.startsWith('de-DE') && (v.name.includes('Google') || v.name.includes('Hedda') || v.name.includes('Deutsch'))
         );
-        if (stimme) sprecher.voice = stimme;
-        speechSynthesis.speak(sprecher);
+        if (germanVoice) utterance.voice = germanVoice;
+        speechSynthesis.speak(utterance);
     }
 
     // Neue Nachrichtenblase in den Chat einfügen
-    function nachrichtAnzeigen(rolle, text, optionen = {}) {
-        const msg = document.createElement('div');
-        msg.className = `message ${rolle}`;
-        if (optionen.platzhalter) msg.classList.add('placeholder'); // Ladezustand markieren
+    function addMessage(role, text, options = {}) {
+        const m = document.createElement('div');
+        m.className = `message ${role}`;
+        if (options.placeholder) m.classList.add('placeholder'); // Ladezustand markieren
 
-        const blase = document.createElement('div');
-        blase.className = 'bubble';
+        const b = document.createElement('div');
+        b.className = 'bubble';
 
-        if (rolle === 'bot' && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-            blase.innerHTML = DOMPurify.sanitize(marked.parse(text)); // Markdown rendern + XSS-Schutz
+        if (role === 'bot' && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            b.innerHTML = DOMPurify.sanitize(marked.parse(text)); // Markdown rendern + XSS-Schutz
         } else {
-            blase.textContent = text;
+            b.textContent = text;
         }
 
-        msg.appendChild(blase);
+        m.appendChild(b);
 
         // Quelldokument-Panel nur bei Bot-Nachrichten mit Quellen
-        if (rolle === 'bot' && optionen.sources?.length > 0) {
-            const quelle = optionen.sources[0]; // nur die erste Quelle zeigen
+        if (role === 'bot' && options.sources && options.sources.length > 0) {
+            const src = options.sources[0]; // nur die erste Quelle zeigen
 
             const toggle = document.createElement('div');
             toggle.className   = 'source-toggle';
@@ -112,116 +112,124 @@ document.addEventListener('DOMContentLoaded', () => {
             panel.className = 'source-panel';
 
             const info = document.createElement('div');
-            info.textContent = quelle.title || 'Dokumentation';
+            info.textContent = src.title || 'Dokumentation';
             panel.appendChild(info);
 
             const iframe = document.createElement('iframe');
-            iframe.src     = quelle.url;
+            iframe.src     = src.url;
             iframe.loading = 'lazy';
             panel.appendChild(iframe);
 
             toggle.addEventListener('click', () => {
-                const sichtbar = panel.style.display === 'block';
-                panel.style.display = sichtbar ? 'none' : 'block'; // Panel ein-/ausklappen
-                toggle.textContent  = sichtbar ? 'Dokumentation anzeigen' : 'Dokumentation ausblenden';
+                const isVisible = panel.style.display === 'block';
+                panel.style.display = isVisible ? 'none' : 'block'; // Panel ein-/ausklappen
+                toggle.textContent  = isVisible ? 'Dokumentation anzeigen' : 'Dokumentation ausblenden';
             });
 
-            msg.appendChild(toggle);
-            msg.appendChild(panel);
+            m.appendChild(toggle);
+            m.appendChild(panel);
         }
 
-        chatBox.appendChild(msg);
-        scrollNachUnten();
-        return { messageEl: msg, bubbleEl: blase };
+        chatBox.appendChild(m);
+        scrollToBottom();
+        return { messageEl: m, bubbleEl: b };
     }
 
-    // API-Endpunkt und eindeutige Sitzungs-ID (kryptografisch sicher)
-    const API_URL    = 'http://localhost:8000/api/chat';
-    const SESSION_ID = crypto?.randomUUID?.() ??
-        `session-${[...crypto.getRandomValues(new Uint32Array(4))].map(n => n.toString(36)).join('')}`;
-    console.log('[Sitzung] ID:', SESSION_ID);
+    // API-Endpunkt und eindeutige Sitzungs-ID für diesen Seitenaufruf
+    const API_BASE   = 'http://localhost:8000';
+    const API_URL    = `${API_BASE}/api/chat`;
+    const SESSION_ID = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    console.log('[Session] ID:', SESSION_ID);
 
     // Eingabe sperren bis Sitzung bereit ist
-    [sendeBtn, eingabe, mikBtn].forEach(el => { if (el) el.disabled = true; });
+    if (sendBtn)   sendBtn.disabled   = true;
+    if (userInput) userInput.disabled = true;
+    if (micBtn)    micBtn.disabled    = true;
 
     // Sitzung beim Backend initialisieren
-    fetch('http://localhost:8000/api/session/init', {
+    fetch(`${API_BASE}/api/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: SESSION_ID })
     })
     .then(() => {
-        console.log('[Sitzung] Bereit:', SESSION_ID);
-        [sendeBtn, eingabe, mikBtn].forEach(el => { if (el) el.disabled = false; }); // Eingabe freischalten
+        console.log('[Session] Initialised successfully:', SESSION_ID);
+        if (sendBtn)   sendBtn.disabled   = false; // Eingabe freischalten
+        if (userInput) userInput.disabled = false;
+        if (micBtn)    micBtn.disabled    = false;
     })
     .catch(err => {
-        console.error('[Sitzung] Fehler:', err);
-        [sendeBtn, eingabe, mikBtn].forEach(el => { if (el) el.disabled = false; }); // auch bei Fehler freischalten
+        console.error('[Session] Init failed:', err);
+        if (sendBtn)   sendBtn.disabled   = false; // auch bei Fehler freischalten
+        if (userInput) userInput.disabled = false;
+        if (micBtn)    micBtn.disabled    = false;
     });
 
     // Nachricht ans Backend senden und Antwort anzeigen
-    const senden = async () => {
-        const text = (eingabe.value || '').trim();
-        if (!text) return;
+    const send = async () => {
+        const value = (userInput.value || '').trim();
+        if (!value) return;
 
-        nachrichtAnzeigen('user', text);
-        eingabe.value = '';
+        addMessage('user', value);
+        userInput.value = '';
 
         // Ladeplatzhalter während der Anfrage anzeigen
-        const ladeAnzeige = nachrichtAnzeigen('bot', 'Diagnose wird erstellt...', { platzhalter: true });
-        if (sendeBtn) sendeBtn.disabled = true;
+        const placeholder = addMessage('bot', 'Diagnose wird erstellt...', { placeholder: true });
+        if (sendBtn) sendBtn.disabled = true;
 
-        const startZeit = Date.now();
-        const MIN_WARTE = 500; // mindestens 500ms Ladezeit anzeigen
+        const start       = Date.now();
+        const MIN_WAIT_MS = 500; // mindestens 500ms Ladezeit anzeigen
 
         try {
-            const antwort = await fetch(API_URL, {
+            const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text, sessionId: SESSION_ID })
+                body: JSON.stringify({ message: value, sessionId: SESSION_ID })
             });
 
-            if (!antwort.ok) throw new Error(`HTTP ${antwort.status}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-            const daten   = await antwort.json();
-            const botText = daten.answer || 'Keine Antwort vom LLM erhalten.';
-            const warte   = Math.max(0, MIN_WARTE - (Date.now() - startZeit));
+            const data   = await response.json();
+            const answer = data.answer || 'Keine Antwort vom LLM erhalten.';
+            const wait   = Math.max(0, MIN_WAIT_MS - (Date.now() - start));
 
             setTimeout(() => {
                 // Platzhalter durch echte Antwort ersetzen
-                if (ladeAnzeige?.bubbleEl) {
+                if (placeholder?.bubbleEl) {
                     if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-                        ladeAnzeige.bubbleEl.innerHTML = DOMPurify.sanitize(marked.parse(botText));
+                        placeholder.bubbleEl.innerHTML = DOMPurify.sanitize(marked.parse(answer));
                     } else {
-                        ladeAnzeige.bubbleEl.textContent = botText;
+                        placeholder.bubbleEl.textContent = answer;
                     }
-                    ladeAnzeige.messageEl.classList.remove('placeholder');
+                    placeholder.messageEl.classList.remove('placeholder');
                 } else {
-                    nachrichtAnzeigen('bot', botText);
+                    addMessage('bot', answer);
                 }
-                vorlesen(botText);
-                if (sendeBtn) sendeBtn.disabled = false;
-            }, warte);
+                speak(answer);
+                if (sendBtn) sendBtn.disabled = false;
+            }, wait);
 
-        } catch (fehler) {
-            console.error('Fehler beim Request:', fehler);
-            const warte = Math.max(0, MIN_WARTE - (Date.now() - startZeit));
+        } catch (err) {
+            console.error('Fehler beim Request:', err);
+            const wait = Math.max(0, MIN_WAIT_MS - (Date.now() - start));
             setTimeout(() => {
                 // Fehlermeldung anzeigen
-                if (ladeAnzeige?.bubbleEl) {
-                    ladeAnzeige.bubbleEl.textContent = 'Fehler beim Kontakt zum LLM Backend.';
-                    ladeAnzeige.messageEl.classList.remove('placeholder');
+                if (placeholder?.bubbleEl) {
+                    placeholder.bubbleEl.textContent = 'Fehler beim Kontakt zum LLM Backend.';
+                    placeholder.messageEl.classList.remove('placeholder');
                 } else {
-                    nachrichtAnzeigen('bot', 'Fehler beim Kontakt zum LLM Backend.');
+                    addMessage('bot', 'Fehler beim Kontakt zum LLM Backend.');
                 }
-                if (sendeBtn) sendeBtn.disabled = false;
-            }, warte);
+                if (sendBtn) sendBtn.disabled = false;
+            }, wait);
         }
     };
 
     // Sende-Button und Enter-Taste binden
-    sendeBtn?.addEventListener('click', senden);
-    eingabe.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); senden(); } // Enter = Senden
+    if (sendBtn) sendBtn.addEventListener('click', send);
+    userInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); send(); } // Enter = Senden
     });
 });
