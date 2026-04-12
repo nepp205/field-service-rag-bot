@@ -25,7 +25,7 @@ services:
       - ./Context_Handler/pdfs:/app/pdfs
       - hf_cache:/opt/hf-cache
     environment:
-      - FLASK_APP=context_webserver.py
+      - FLASK_APP=Context_Webserver.py
       - FLASK_ENV=production
       - HF_HOME=/opt/hf-cache
       - HF_HUB_CACHE=/opt/hf-cache/hub
