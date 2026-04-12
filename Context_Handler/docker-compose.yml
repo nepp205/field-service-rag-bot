@@ -11,7 +11,6 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./pdfs:/app/pdfs
       - hf_cache:/opt/hf-cache
     environment:
       - FLASK_APP=Context_Webserver.py
@@ -39,5 +38,14 @@ networks:
   rag-network:
     driver: bridge
 
+# wichtig es muss erst einmal über das root compose das Volume erstellt werden
+# Also muss initial erstmal das darüberliegende compose ausgeführt werden
+# Das hat den sinn dass man das modell nicht doppelt runterladen musss und in den 
+# volumes vorliegt. 9 GB reichen müssen nicht 18 sein
+
+# das modell muss hierbei nicht runtergeladen sein.
+# Das wird duch warm_model_cache.py automatisch in das verzeichnis heruntergeladen
 volumes:
   hf_cache:
+    external: true
+    name: field-service-rag-bot_hf_cache
