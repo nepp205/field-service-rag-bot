@@ -17,10 +17,6 @@ Diese Anwendung ist ein Flask-basiertes RAG (Retrieval Augmented Generation) Sys
 - `.env` Datei mit den korrekten Qdrant Credentials
 
 ### Environment Variablen
-Erstelle eine `.env` Datei basierend auf `.env.example`:
-```
-cp .env.example .env
-```
 
 Die folgenden Variablen werden benötigt:
  - `QDRANT_URL` - URL zur Qdrant Vector Database   <!--https://512bf099-ef76-4b8d-bbb0-81c64346546e.eu-central-1-0.aws.cloud.qdrant.io-->
@@ -31,7 +27,7 @@ Die folgenden Variablen werden benötigt:
  - `FLASK_ENV=production`
  - `FLASK_APP=context_webserver.py`
 
- - `Webserver_Token=Placeholder`
+ - `WEBSERVER_TOKEN=Placeholder`
 
 ---
 
@@ -57,7 +53,6 @@ docker-compose down
 
 Der Webserver läuft erreichbar unter:
 - **URL**: `http://localhost:5000`
-- **Health Check**: `GET http://localhost:5000/health`
 - **API Endpoint**: `POST http://localhost:5000/context`
 
 #### API Parameter:
@@ -75,7 +70,7 @@ Der Webserver läuft erreichbar unter:
 curl -X POST http://localhost:5000/context \
   -H "Authorization: Bearer Placeholder" \
   -H "Content-Type: application/json" \
-  -d '{"query": "Wie wechsle ich die Heizung in meiner Siemens Waschmaschine?"}'
+  -d '{"query": "Wie wechsle ich die Heizung in meiner Miele Waschmaschine?"}'
 ```
 
 #### Request (mit Model-Filter):
@@ -89,7 +84,7 @@ curl -X POST http://localhost:5000/context \
 #### Response:
 ```json
 {
-  "context": "Quelle: siemens-waschmaschine-W1.pdf\n...\n\n---\n\n..."
+  "context": "Quelle: Miele-waschmaschine-W1.pdf\n...\n\n---\n\n..."
 }
 ```
 
@@ -117,26 +112,6 @@ response = requests.post(url, headers=headers, json=data)
 print(json.dumps(response.json(), indent=2))
 ```
 
-**JavaScript/Node.js:**
-```javascript
-const token = "Placeholder";
-
-const response = await fetch("http://localhost:5000/context", {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${token}`,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({ 
-    query: "Welche Fehler können auftreten?",
-    model: "W1"  // Optional: Filtern nach Modellname
-  })
-});
-
-const data = await response.json();
-console.log(data);
-```
-
 ---
 
 ## Docker Compose Datei Struktur
@@ -146,7 +121,7 @@ services:
   rag-bot:
     - Container Name: rag-bot-app
     - Port: 5000
-    - Volumes: ./pdfs -> /app/pdfs
+    - Volumes: hf_cache
     - Health Check: Aktiviert (30s Interval)
     - Auto-Restart: enabled
 ```
@@ -179,13 +154,6 @@ docker network ls
 docker network inspect rag-network
 ```
 
-### Qdrant Verbindung fehlgeschlagen
-- `.env` Datei prüfen
-- `QDRANT_URL` und `QDRANT_API_KEY` validieren
-- Netzwerkverbindung prüfen (firewall, proxy)
-
----
-
 ## Performance & Skalierung
 
 Der Container nutzt:
@@ -197,13 +165,3 @@ Für höhere Last die Worker-Anzahl im Dockerfile anpassen:
 ```dockerfile
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "8", ...]
 ```
-
----
-
-## Sicherheit
-
-⚠️ **Wichtig**: 
-- Das SECRET_TOKEN ist hart-codiert. Für Production sollte es:
-  - In Environment Variablen ausgelagert sein
-  - Regelmäßig rotiert werden
-  - Über einen Secret Manager verwaltet werden
