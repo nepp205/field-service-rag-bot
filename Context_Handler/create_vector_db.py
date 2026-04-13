@@ -105,7 +105,7 @@ print("Neue Qdrant Collection erstellt")
 client.create_payload_index(
     collection_name=COLLECTION_NAME,
     field_name="file_name",
-    field_schema=PayloadSchemaType.KEYWORD,     # aufgrund eines Fehlers bei der metadata cerarbeitung wurde das Feldschema auf Keyword gesetzt damit es im späteren Metadatamanagement verwendet werden kann
+    field_schema=PayloadSchemaType.KEYWORD,     # aufgrund eines Fehlers bei der metadata verarbeitung wurde das Feldschema auf Keyword gesetzt damit es im späteren Metadatamanagement verwendet werden kann
 )
 print("Payload-Index für 'file_name' erstellt")
 
