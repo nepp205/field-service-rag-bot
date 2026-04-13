@@ -1,35 +1,35 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="de" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Field Service RAG Bot</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Bundled locally so Docker containers work without internet access -->
+    <!-- scripte zur darstellung von markdown-->
     <script src="marked.umd.js"></script>
     <script src="purify.min.js"></script>
-    <!-- script.js is deferred so the DOM is ready before JS runs -->
+    <!-- normales javascript für ui funktionen und server calls -->
     <script src="script.js" defer></script>
 </head>
 <body>
     <h1>Field Service Rag Bot für Miele Geräte</h1>
     <p>Dieser Bot hilft bei der Fehlersuche und Diagnose von Miele Geräten.</p>
 
-    <!-- Light/dark theme toggle + TTS toggle buttons (top of page) -->
+    <!-- hell/dunkel toggle + TTS toggle -->
     <div class="controls">
         <button id="tts-toggle" title="Text-to-Speech">🔇</button>
         <button id="theme-toggle" title="Dark/Light Mode">☀️</button>
     </div>
 
-    <!-- Main chat shell -->
+    <!-- chat fenster -->
     <div id="chat-container">
 
-        <!-- Scrollable message list; the scroll-to-bottom button overlays it -->
+        <!-- div für nachrichten, mit scroll down button, werden aus dem js befüllt -->
         <div id="chat-box">
             <button id="scroll-down-btn" title="Zum Neuesten">⬇</button>
         </div>
 
-        <!-- Input row: text field + mic button + send button -->
+        <!-- Eingabezeile: Textfeld + Mikrofon-Button + Senden-Button -->
         <div class="input-area">
             <input type="text" id="user-input" placeholder="Nachricht eingeben...">
             <button id="mic-button" title="Spracheingabe">🎤</button>

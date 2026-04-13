@@ -1,16 +1,11 @@
-// ============================================================
-// Theme toggle – switches between light and dark mode via the
-// data-theme attribute on <html>.
-// ============================================================
+// Schaltet zwischen hellem und dunklem Theme um.
 document.getElementById('theme-toggle').onclick = () => {
     const isDark = document.documentElement.dataset.theme === 'dark';
     document.documentElement.dataset.theme = isDark ? 'light' : 'dark';
     document.getElementById('theme-toggle').textContent = isDark ? '🌙' : '☀️';
 };
 
-// ============================================================
-// TTS toggle – enables / disables text-to-speech (off by default)
-// ============================================================
+// Schaltet Text-to-Speech ein oder aus.
 let ttsEnabled = false;
 
 document.getElementById('tts-toggle').onclick = () => {
@@ -21,27 +16,25 @@ document.getElementById('tts-toggle').onclick = () => {
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    // ---- Element references ----
+    // Holt die wichtigsten Elemente aus dem DOM.
     const sendBtn      = document.getElementById('send-button');
     const userInput    = document.getElementById('user-input');
     const micBtn       = document.getElementById('mic-button');
     const chatBox      = document.getElementById('chat-box');
     const scrollDownBtn = document.getElementById('scroll-down-btn');
 
-    // Abort early if required elements are missing
+    // Bricht ab, wenn wichtige Elemente fehlen.
     if (!userInput || !chatBox) return;
 
-    // ============================================================
-    // Scroll helpers
-    // ============================================================
+    // Hilfsfunktionen fürs Scrollen.
 
-    /** Show or hide the scroll-to-bottom button depending on position. */
+    // Zeigt oder versteckt den Scroll-Button je nach Position.
     function checkScrollPosition() {
         const isAtBottom = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 1;
         scrollDownBtn.classList.toggle('show', !isAtBottom);
     }
 
-    /** Smooth-scroll the chat box to the latest message. */
+    // Scrollt weich zur neuesten Nachricht.
     function scrollToBottom() {
         chatBox.scrollTo({
             top: chatBox.scrollHeight,
@@ -50,25 +43,24 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollDownBtn.classList.remove('show');
     }
 
-    // Update scroll-button visibility on user scroll and on new messages
+    // Aktualisiert den Scroll-Button bei Scrollen und neuen Nachrichten.
     scrollDownBtn?.addEventListener('click', scrollToBottom);
     chatBox.addEventListener('scroll', checkScrollPosition);
 
+    // Beobachtet Änderungen im Chat für die Scroll-Logik.
     const observer = new MutationObserver(checkScrollPosition);
     observer.observe(chatBox, { childList: true, subtree: true });
 
-    // ============================================================
-    // Speech-to-Text (STT)
-    // ============================================================
+    // Bereich für Speech-to-Text.
     let recognition;
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
-        recognition.continuous    = false;  // stop after first utterance
-        recognition.interimResults = true;   // allow partial (interim) results
+        recognition.continuous    = false;  // Stoppt nach der ersten Erkennung.
+        recognition.interimResults = true;   // Zeigt auch Zwischenergebnisse an.
         recognition.lang          = 'de-DE';
 
-        // Fill the input field with the recognised transcript
+        // Schreibt den erkannten Text ins Eingabefeld.
         recognition.onresult = (event) => {
             userInput.value = event.results[0][0].transcript;
         };
@@ -82,33 +74,26 @@ document.addEventListener('DOMContentLoaded', () => {
         micBtn.addEventListener('click', () => {
             if (recognition) {
                 recognition.start();
-                micBtn.textContent = '⏹️'; // indicate active recording
+                micBtn.textContent = '⏹️'; // Zeigt aktive Aufnahme an.
             } else {
                 alert('Spracherkennung nicht unterstützt (Chrome/Edge/Safari)');
             }
         });
 
-        // Reset mic icon when recognition session ends
+        // Setzt das Mikro-Icon zurück, wenn die Aufnahme endet.
         recognition?.addEventListener('end', () => {
             micBtn.textContent = '🎤';
         });
     }
 
-    // ============================================================
-    // Text-to-Speech (TTS)
-    // ============================================================
+    // Bereich für Text-to-Speech.
 
-    /**
-     * Read `text` aloud using the Web Speech API.
-     * Prefers a German Google / system voice when available.
-     *
-     * @param {string} text - Plain text to speak.
-     */
+    // Liest den Text laut vor und bevorzugt eine deutsche Stimme.
     function speak(text) {
         if (!ttsEnabled) return;
         if (!('speechSynthesis' in window)) return;
 
-        speechSynthesis.cancel(); // stop any ongoing utterance
+        speechSynthesis.cancel(); // Stoppt laufende Sprachausgabe.
 
         const utterance  = new SpeechSynthesisUtterance(text);
         utterance.lang   = 'de-DE';
@@ -116,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         utterance.pitch  = 1.0;
         utterance.volume = 0.8;
 
-        // Prefer a high-quality German voice if one is available
+    // Nutzt eine gute deutsche Stimme, wenn verfügbar.
         const voices = speechSynthesis.getVoices();
         const germanVoice = voices.find(v =>
             v.lang.startsWith('de-DE') && (
@@ -130,20 +115,9 @@ document.addEventListener('DOMContentLoaded', () => {
         speechSynthesis.speak(utterance);
     }
 
-    // ============================================================
-    // Chat helpers
-    // ============================================================
+    // Hilfsfunktionen für den Chat.
 
-    /**
-     * Append a message bubble to the chat box.
-     *
-     * @param {'user'|'bot'} role - Who sent the message.
-     * @param {string}       text - Message content.
-     * @param {Object}       [options={}]
-     * @param {Array}        [options.sources] - Optional list of source objects
-     *                       ({title, url}) shown as a collapsible panel for
-     *                       bot messages.
-     */
+    // Fügt eine neue Nachrichtenblase im Chat hinzu.
     function addMessage(role, text, options = {}) {
         const m = document.createElement('div');
         m.className = `message ${role}`;
@@ -153,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         b.className = 'bubble';
 
         if (role === 'bot' && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-            // Render markdown and sanitize to prevent XSS
+            // Rendert Markdown und bereinigt es gegen XSS.
             b.innerHTML = DOMPurify.sanitize(marked.parse(text));
         } else {
             b.textContent = text;
@@ -161,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         m.appendChild(b);
 
-        // Source-document collapsible panel (bot messages only)
+    // Aufklappbares Quellenfeld nur für Bot-Nachrichten.
         if (role === 'bot' && options.sources && options.sources.length > 0) {
             const toggle = document.createElement('div');
             toggle.className = 'source-toggle';
@@ -170,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const panel = document.createElement('div');
             panel.className = 'source-panel';
 
-            const src = options.sources[0]; // display the primary source
+            const src = options.sources[0]; // Zeigt die wichtigste Quelle.
 
             const info = document.createElement('div');
             info.textContent = src.title || 'Dokumentation';
@@ -199,25 +173,23 @@ document.addEventListener('DOMContentLoaded', () => {
         return { messageEl: m, bubbleEl: b };
     }
 
-    // ============================================================
-    // Backend API
-    // ============================================================
+    // Backend-API Einstellungen.
 
     const API_BASE  = 'http://localhost:8000';
     const API_URL   = `${API_BASE}/api/chat`;
 
-    // Generate a unique session ID for this page load.
+    // Erstellt eine eindeutige Session-ID für diesen Seitenaufruf.
     const SESSION_ID = (typeof crypto !== 'undefined' && crypto.randomUUID)
         ? crypto.randomUUID()
         : `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     console.log('[Session] ID:', SESSION_ID);
 
-    // Disable input until the session is ready
+    // Deaktiviert Eingaben bis die Session bereit ist.
     if (sendBtn)   sendBtn.disabled = true;
     if (userInput) userInput.disabled = true;
     if (micBtn)    micBtn.disabled = true;
 
-    // Silently initialise the session on the backend (no UI feedback)
+    // Initialisiert die Session im Backend ohne zusätzliche UI-Meldung.
     fetch(`${API_BASE}/api/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -231,17 +203,13 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     .catch((err) => {
         console.error('[Session] Init failed:', err);
-        // Still enable input so the user can try (fallback session created on first chat)
+        // Aktiviert Eingaben trotzdem, damit man es direkt probieren kann.
         if (sendBtn)   sendBtn.disabled = false;
         if (userInput) userInput.disabled = false;
         if (micBtn)    micBtn.disabled = false;
     });
 
-    /**
-     * Send the current input value to the backend and display the answer.
-     * Shows a temporary "thinking" message while waiting for the response.
-     * The bot's reply is also read aloud via TTS.
-     */
+    // Sendet die Eingabe ans Backend und zeigt danach die Antwort an.
     const send = async () => {
         const value = (userInput.value || '').trim();
         if (!value) return;
@@ -249,13 +217,13 @@ document.addEventListener('DOMContentLoaded', () => {
         addMessage('user', value);
         userInput.value = '';
 
-        // Temporary thinking placeholder shown while the request is in-flight
+    // Zeigt kurz eine Platzhalter-Nachricht während die Anfrage läuft.
         const thinkingText = 'Diagnose wird erstellt...';
         const placeholder = addMessage('bot', thinkingText, { placeholder: true });
         if (sendBtn) sendBtn.disabled = true;
 
         const start      = Date.now();
-        const MIN_WAIT_MS = 500; // minimum display time for the thinking message
+    const MIN_WAIT_MS = 300; // Mindestanzeigezeit für den Platzhalter.
 
         try {
             const response = await fetch(API_URL, {
@@ -273,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const wait    = Math.max(0, MIN_WAIT_MS - elapsed);
 
             setTimeout(() => {
-                // Replace placeholder content with real answer
+                // Ersetzt den Platzhalter mit der echten Antwort.
                 if (placeholder?.bubbleEl) {
                     if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
                         placeholder.bubbleEl.innerHTML = DOMPurify.sanitize(marked.parse(answer));
@@ -296,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const wait    = Math.max(0, MIN_WAIT_MS - elapsed);
 
             setTimeout(() => {
-                // Replace placeholder content with error message
+                // Ersetzt den Platzhalter mit einer Fehlermeldung.
                 if (placeholder?.bubbleEl) {
                     placeholder.bubbleEl.textContent = 'Fehler beim Kontakt zum LLM Backend.';
                     placeholder.messageEl.classList.remove('placeholder');
@@ -308,15 +276,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // ============================================================
-    // Event listeners
-    // ============================================================
+    // Event-Listener.
 
     if (sendBtn) {
         sendBtn.addEventListener('click', send);
     }
 
-    // Allow sending with the Enter key
+    // Erlaubt das Senden mit der Enter-Taste.
     userInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
