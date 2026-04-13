@@ -1,5 +1,5 @@
 #Erstellt mit GitHub Copilot, selbst verfeinert
-
+#Systemprompt selbst vorerstellt, dann mit github copilot formattiert und erweitert
 
 
 fastapi>=0.95.0

@@ -46,11 +46,13 @@ CONTEXT_SYSTEM_MARKERS = (
     "Context:\n",
 )
 
+# Hier startet die Lebenszyklus-Logik von FastAPI.
 ### fast api 
 
 @asynccontextmanager
 async def lifespan(app): #startup event definieren
     global _azure_client
+    # Initialisiert den Azure-Client einmal beim Start.
     _azure_client = AzureOpenAI(
         azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
         api_key=os.environ["AZURE_OPENAI_API_KEY"],
@@ -71,6 +73,7 @@ with open('form.json', 'r', encoding='utf-8') as form:
 
 def test_json():
     global json_filled
+    # Setzt das Flag nur auf true, wenn alle Felder vorhanden sind.
     if json_form["problem"] != "" and json_form["product_model_name"] !="" and json_form["error_code"]!="":
         json_filled = True
     else:
@@ -81,12 +84,14 @@ print(_history)
 
 def fill_json_form(problem: str, product_model_name: str, error_code: str):
     global json_form
+    # Merkt sich den alten Zustand, um Änderungen zu erkennen.
     previous = {
         "problem": str(json_form.get("problem", "")).strip(),
         "product_model_name": str(json_form.get("product_model_name", "")).strip(),
         "error_code": str(json_form.get("error_code", "")).strip(),
     }
 
+    # Bereitet neue Werte aus dem Tool-Call auf.
     updated = {
         "problem": problem.strip(),
         "product_model_name": product_model_name.strip(),
@@ -98,10 +103,12 @@ def fill_json_form(problem: str, product_model_name: str, error_code: str):
     json_form["error_code"] = updated["error_code"]
     test_json()
 
+    # Gibt zurück, ob sich im Formular etwas geändert hat.
     return updated != previous
 
 
 def has_context_in_history(history: list[dict]) -> bool:
+    # Prüft, ob schon ein Kontextblock in der History liegt.
     return any(
         msg.get("role") == "system"
         and isinstance(msg.get("content"), str)
@@ -111,6 +118,7 @@ def has_context_in_history(history: list[dict]) -> bool:
 
 
 def clear_context_from_history(history: list[dict]) -> None:
+    # Entfernt alte Kontext-Systemeinträge aus der History.
     history[:] = [
         msg for msg in history
         if not (
@@ -122,18 +130,22 @@ def clear_context_from_history(history: list[dict]) -> None:
 
 
 def upsert_context_in_history(history: list[dict], context_text: str) -> None:
+    # Baut die neue Kontext-Nachricht.
     context_message = {
         "role": "system",
         "content": f"{CONTEXT_SYSTEM_PREFIX}{context_text}",
     }
 
+    # Räumt zuerst alte Kontexte weg.
     clear_context_from_history(history)
 
+    # Setzt den neuen Kontext direkt hinter den Systemprompt.
     insert_index = 1 if history and history[0].get("role") == "system" else 0
     history.insert(insert_index, context_message)
 
 
 def build_context_query(user_message: str) -> str:
+    # Baut eine strukturierte Query aus dem Formular, wenn alles gesetzt ist.
     test_json()
     if json_filled:
         return (
@@ -141,10 +153,12 @@ def build_context_query(user_message: str) -> str:
             f"Product model name: {json_form.get('product_model_name', '')}\n"
             f"Error code: {json_form.get('error_code', '')}"
         )
+    # Nimmt sonst einfach die User-Nachricht.
     return user_message
 
 
 def persist_form_json() -> None:
+    # Speichert den aktuellen Formularstand in der Datei.
     with open('form.json', 'w', encoding='utf-8') as f:
         json.dump(json_form, f, ensure_ascii=False, indent=2)
 
@@ -212,8 +226,10 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
 
     payload = {"query": query}
     if model:
+        # Hängt optional das Modell an die Anfrage an.
         payload["model"] = model
 
+    # Führt den Request mit Retry-Logik aus.
     for attempt in range(retries + 1):
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -231,6 +247,7 @@ async def fetch_context(query: str, model: Optional[str] = None, timeout: float 
                 logging.warning("Context handler response missing 'context' field: %s", data)
                 return None
 
+            # Macht aus Liste oder String immer einen String.
             if isinstance(context, list):
                 context = "\n\n".join(map(str, context))
             else:
@@ -291,7 +308,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     history = _history #vaible für die konversation, startet mit system prompt, wird bei jeder anfrage erweitert
 
-   
+    # Hängt die aktuelle User-Nachricht an die History.
 
     #user prompt an history anhängen (aus frontend)
     history.append({"role": "user", "content": req.message})
@@ -312,6 +329,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         form_changed = False
 
         if message.tool_calls:
+            # Speichert den Assistant-Tool-Call in der History.
             history.append({
                 "role": "assistant",
                 "content": message.content or "",
@@ -320,6 +338,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
             for tool_call in message.tool_calls:
                 if tool_call.function.name == "fill_json_form":
+                    # Liest Tool-Argumente und schreibt sie in die Form.
                     args = json.loads(tool_call.function.arguments)
 
                     changed_in_call = fill_json_form(
@@ -336,6 +355,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
                 })
 
             if form_changed:
+                # Speichert nur bei echten Änderungen in die Datei.
                 try:
                     persist_form_json()
                 except Exception:
@@ -349,6 +369,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         )
 
         if should_refresh_context:
+            # Holt neuen Kontext, wenn die Form vollständig/aktualisiert ist.
             try:
                 context_query = build_context_query(req.message)
                 context_text = await fetch_context(context_query, model=req.model)
@@ -358,9 +379,11 @@ async def chat(req: ChatRequest) -> ChatResponse:
                 context_text = None
 
             if context_text:
+                # Ersetzt alte Kontexte in der History mit dem neuen.
                 upsert_context_in_history(history, context_text)
 
         if message.tool_calls:
+            # Macht nach Tool-Call die finale Modellantwort.
             second = _azure_client.chat.completions.create(
                 model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
                 messages=history,
@@ -384,6 +407,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
 
 async def health_check():
+    # Kleiner manueller Check für den Context-Endpoint.
     url = os.getenv("CONTEXT_HANDLER_URL")
     token = os.getenv("CONTEXT_HANDLER_TOKEN")
     if not url or not token:
