@@ -80,7 +80,7 @@ DOCUMENT_CATALOG_LAST_REFRESH = 0.0
 
 def build_document_catalog() -> list[dict]:
     """Create a cached catalog of indexed PDF names from Qdrant payload metadata."""
-    # Der Katalog wird direkt aus Qdrant geladen, damit kein lokales `pdfs/`
+    # Der Katalog wird direkt aus Qdrant geladen, damit kein lokales
     # Verzeichnis für den Modellabgleich benötigt wird.
     global DOCUMENT_CATALOG, DOCUMENT_CATALOG_LAST_REFRESH
 
