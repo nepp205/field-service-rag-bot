@@ -257,38 +257,6 @@ p {
     font-weight: 600;
 }
 
-/* --------------------------------------------------------------------------
-   Source-document collapsible panel
-   -------------------------------------------------------------------------- */
-.source-toggle {
-    font-size: 0.85rem;
-    color: var(--accent);
-    cursor: pointer;
-    margin-top: 6px;
-    user-select: none;
-    display: block;
-    align-self: flex-start;
-}
-
-.source-toggle:hover {
-    text-decoration: underline;
-}
-
-.source-panel {
-    width: 100%;
-    display: none;
-    margin-top: 6px;
-    border-left: 2px solid var(--border);
-    padding-left: 8px;
-}
-
-.source-panel iframe {
-    width: 100%;
-    height: 300px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-}
-
 /* Meta text */
 .meta {
     font-size: 12px;

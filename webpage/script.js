@@ -135,38 +135,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         m.appendChild(b);
 
-    // Aufklappbares Quellenfeld nur für Bot-Nachrichten.
-        if (role === 'bot' && options.sources && options.sources.length > 0) {
-            const toggle = document.createElement('div');
-            toggle.className = 'source-toggle';
-            toggle.textContent = 'Dokumentation anzeigen';
-
-            const panel = document.createElement('div');
-            panel.className = 'source-panel';
-
-            const src = options.sources[0]; // Zeigt die wichtigste Quelle.
-
-            const info = document.createElement('div');
-            info.textContent = src.title || 'Dokumentation';
-            panel.appendChild(info);
-
-            const iframe = document.createElement('iframe');
-            iframe.src     = src.url;
-            iframe.loading = 'lazy';
-            panel.appendChild(iframe);
-
-            toggle.addEventListener('click', () => {
-                const isVisible = panel.style.display === 'block';
-                panel.style.display = isVisible ? 'none' : 'block';
-                toggle.textContent  = isVisible
-                    ? 'Dokumentation anzeigen'
-                    : 'Dokumentation ausblenden';
-            });
-
-            m.appendChild(toggle);
-            m.appendChild(panel);
-        }
-
         chatBox.appendChild(m);
         scrollToBottom();
 
