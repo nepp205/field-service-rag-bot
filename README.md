@@ -1,128 +1,130 @@
 # Field-Service RAG Bot
 
-A Retrieval-Augmented Generation (RAG) chatbot designed for field-service technicians. The bot answers questions about Miele appliance documentation by retrieving relevant content from a Qdrant cloud vector database and generating accurate answers through Azure OpenAI — served through a conversational web interface.
+Ein Retrieval-Augmented Generation (RAG) Chatbot für Außendienst-Techniker. Der Bot beantwortet Fragen zur Miele-Gerätedokumentation, indem er relevante Inhalte aus einer Qdrant Cloud-Vektordatenbank abruft und über Azure OpenAI präzise Antworten generiert – bereitgestellt über eine konversationelle Weboberfläche.
+
+**Erstellt von:** Marvin Palsbröker, Tobias Stolle und Niklas Epp – Studierende an der FHDW, im Rahmen des Kurses „Advanced Topics in Computer Science".
 
 ---
 
-## Table of Contents
+## Inhaltsverzeichnis
 
-- [Architecture Overview](#architecture-overview)
-- [Repository Structure](#repository-structure)
-- [Services](#services)
+- [Architekturübersicht](#architekturübersicht)
+- [Repository-Struktur](#repository-struktur)
+- [Dienste](#dienste)
   - [Context Handler](#context-handler)
   - [Request Handler](#request-handler)
   - [Webpage](#webpage)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Step 1 – Configure Environment Variables](#step-1--configure-environment-variables)
-  - [Step 2 – Populate the Vector Database](#step-2--populate-the-vector-database)
-  - [Step 3 – Start All Services with Docker Compose](#step-3--start-all-services-with-docker-compose)
-  - [Step 4 – Open the Frontend](#step-4--open-the-frontend)
-- [Environment Variables Reference](#environment-variables-reference)
-- [Configuration Reference](#configuration-reference)
-- [Troubleshooting](#troubleshooting)
+- [Erste Schritte](#erste-schritte)
+  - [Voraussetzungen](#voraussetzungen)
+  - [Schritt 1 – Umgebungsvariablen konfigurieren](#schritt-1--umgebungsvariablen-konfigurieren)
+  - [Schritt 2 – Vektordatenbank befüllen](#schritt-2--vektordatenbank-befüllen)
+  - [Schritt 3 – Alle Dienste mit Docker Compose starten](#schritt-3--alle-dienste-mit-docker-compose-starten)
+  - [Schritt 4 – Frontend öffnen](#schritt-4--frontend-öffnen)
+- [Referenz der Umgebungsvariablen](#referenz-der-umgebungsvariablen)
+- [Konfigurationsreferenz](#konfigurationsreferenz)
+- [Fehlerbehebung](#fehlerbehebung)
 
 ---
 
-## Architecture Overview
+## Architekturübersicht
 
 ```
-PDF Manuals
+PDF-Handbücher
     │
     ▼
-Context_Handler/create_vector_db.py  ──►  Qdrant Cloud (vector DB)
+Context_Handler/create_vector_db.py  ──►  Qdrant Cloud (Vektordatenbank)
                                                 │
-                                                │ similarity search
+                                                │ Ähnlichkeitssuche
                                                 ▼
 Browser  ◄──►  webpage/  ◄──►  Request_Handler (FastAPI)  ──►  Azure OpenAI API
                                       │
-                                      └── fetches context from Context_Handler (Flask)
+                                      └── ruft Kontext vom Context_Handler (Flask) ab
 ```
 
-The system consists of three independent microservices that run on a shared Docker network (`rag-network`):
+Das System besteht aus drei unabhängigen Microservices, die in einem gemeinsamen Docker-Netzwerk (`rag-network`) betrieben werden:
 
-1. **Context Handler** (port 5000) – A Flask service that embeds incoming queries using `intfloat/multilingual-e5-large` via Hugging Face and retrieves the most relevant PDF chunks from a Qdrant cloud vector database. Supports optional model-name filtering with fuzzy matching.
-2. **Request Handler** (port 8000) – A FastAPI service that manages chat sessions, fetches context from the Context Handler, and calls the Azure OpenAI chat completions API to generate a grounded answer. Runs under Gunicorn + UvicornWorker.
-3. **Webpage** (port 8080) – A self-contained single-page chat interface with speech-to-text input, text-to-speech output, and a light/dark theme toggle. Served by Nginx inside Docker.
+1. **Context Handler** (Port 5000) – Ein Flask-Dienst, der eingehende Anfragen mit dem Modell `intfloat/multilingual-e5-large` von Hugging Face einbettet und die semantisch ähnlichsten PDF-Abschnitte aus der Qdrant Cloud-Vektordatenbank abruft. Unterstützt optionale Modellnamensfilterung mit Fuzzy-Matching. Erstellt von Marvin Palsbröker.
+2. **Request Handler** (Port 8000) – Ein FastAPI-Dienst, der Chat-Sitzungen verwaltet, Kontext vom Context Handler abruft und die Azure OpenAI Chat Completions API aufruft, um eine fundierte Antwort zu generieren. Läuft unter Gunicorn + UvicornWorker.
+3. **Webpage** (Port 8080) – Eine eigenständige Single-Page-Chat-Oberfläche mit Spracheingabe (STT), Sprachausgabe (TTS) und einem Hell-/Dunkel-Theme-Umschalter. Wird von Nginx innerhalb von Docker bereitgestellt.
 
 ---
 
-## Repository Structure
+## Repository-Struktur
 
 ```
 field-service-rag-bot/
 ├── Context_Handler/
-│   ├── create_vector_db.py        # One-time script: index PDFs into Qdrant
-│   ├── context_webserver.py       # Flask entry point (POST /context)
-│   ├── Context_Handler.py         # Thin wrapper around rag.py
-│   ├── rag.py                     # Core retrieval logic (Qdrant + embeddings)
-│   ├── pdf_sources.json           # Maps PDF stems to public source URLs
-│   ├── pdfs/                      # Place appliance PDF manuals here
+│   ├── create_vector_db.py        # Einmaliges Skript: PDFs in Qdrant indexieren
+│   ├── context_webserver.py       # Flask-Einstiegspunkt (POST /context)
+│   ├── Context_Handler.py         # Dünner Wrapper um rag.py
+│   ├── rag.py                     # Kern-Retrieval-Logik (Qdrant + Embeddings)
+│   ├── pdf_sources.json           # Verknüpft PDF-Dateinamen mit öffentlichen Quell-URLs
+│   ├── pdfs/                      # Gerätebezogene PDF-Handbücher hier ablegen
 │   ├── requirements.txt
-│   ├── docker-compose.yml         # Stand-alone compose for this service
+│   ├── docker-compose.yml         # Eigenständiges Compose für diesen Dienst
 │   └── README_DOCKER.md
 ├── Request_Handler/
-│   ├── requesthandler.py          # FastAPI application
-│   ├── system_prompt.txt          # System prompt loaded at startup
-│   ├── gunicorn.conf.py           # Gunicorn/UvicornWorker settings
+│   ├── requesthandler.py          # FastAPI-Anwendung
+│   ├── system_prompt.txt          # Beim Start geladener Systemprompt
+│   ├── gunicorn.conf.py           # Gunicorn/UvicornWorker-Einstellungen
 │   ├── requirements.txt
 │   └── docker-compose.yml
 ├── webpage/
-│   ├── index.html                 # Chat UI (single-page app)
-│   ├── script.js                  # Chat logic, STT, TTS
-│   ├── styles.css                 # Light/dark theme styles
+│   ├── index.html                 # Chat-UI (Single-Page-App)
+│   ├── script.js                  # Chat-Logik, STT, TTS
+│   ├── styles.css                 # Hell-/Dunkel-Theme-Styles
 │   ├── Dockerfile
 │   └── docker-compose.yml
-├── docker-compose.yml             # Root compose – starts all three services
-├── .env.example                   # Template for required environment variables
+├── docker-compose.yml             # Root-Compose – startet alle drei Dienste
+├── .env.example                   # Vorlage für erforderliche Umgebungsvariablen
 └── README.md
 ```
 
 ---
 
-## Services
+## Dienste
 
 ### Context Handler
 
-**Directory:** `Context_Handler/`  
+**Verzeichnis:** `Context_Handler/`  
 **Port:** `5000`  
-**Author:** Marvin Palsbröker
+**Autor:** Marvin Palsbröker
 
-#### Responsibilities
+#### Aufgaben
 
-- Embeds queries using the `intfloat/multilingual-e5-large` Hugging Face model.
-- Searches a Qdrant cloud collection for the most semantically similar PDF chunks.
-- Returns formatted context including PDF name, source URL, page label, and chunk text.
-- Supports optional model-name filtering with typo-tolerant fuzzy matching (`rag.py → resolve_document_name`).
+- Einbettung von Anfragen mit dem Hugging Face Modell `intfloat/multilingual-e5-large`.
+- Suche in einer Qdrant Cloud-Kollektion nach den semantisch ähnlichsten PDF-Abschnitten.
+- Rückgabe von formatiertem Kontext inklusive PDF-Name, Quell-URL, Seitenangabe und Abschnittstext.
+- Optionale Modellnamensfilterung mit tippfehlertoleranter Fuzzy-Suche (`rag.py → resolve_document_name`).
 
-#### Key files
+#### Wichtige Dateien
 
-| File | Purpose |
-|------|---------|
-| `context_webserver.py` | Flask server – exposes `POST /context` and `GET /health` |
-| `Context_Handler.py` | Wrapper that delegates to `rag.get_context()` |
-| `rag.py` | Core retrieval: embedding, Qdrant query, fuzzy document matching |
-| `create_vector_db.py` | One-time indexing script: reads PDFs, chunks, embeds, and upserts into Qdrant |
-| `pdf_sources.json` | Maps PDF filenames (without extension) to their public download URLs |
+| Datei | Zweck |
+|-------|-------|
+| `context_webserver.py` | Flask-Server – stellt `POST /context` und `GET /health` bereit |
+| `Context_Handler.py` | Wrapper, der an `rag.get_context()` delegiert |
+| `rag.py` | Kern-Retrieval: Einbettung, Qdrant-Abfrage, Fuzzy-Dokumentenabgleich |
+| `create_vector_db.py` | Einmaliges Indexierungsskript: liest PDFs, teilt sie in Abschnitte, bettet sie ein und lädt sie in Qdrant hoch |
+| `pdf_sources.json` | Verknüpft PDF-Dateinamen (ohne Erweiterung) mit ihren öffentlichen Download-URLs |
 
 #### API
 
 **`POST /context`**
 
-Requires `Authorization: Bearer <WEBSERVER_TOKEN>` header.
+Erfordert den Header `Authorization: Bearer <WEBSERVER_TOKEN>`.
 
-Request body:
+Anfrage-Body:
 
 ```json
 {
-  "query": "How do I replace the heating element?",
+  "query": "Wie tausche ich das Heizelement aus?",
   "model": "W1"
 }
 ```
 
-> `model` is optional. When provided, only PDFs whose filename fuzzy-matches the value are searched.
+> `model` ist optional. Wenn angegeben, werden nur PDFs durchsucht, deren Dateiname dem Wert per Fuzzy-Matching entspricht.
 
-Response body:
+Antwort-Body:
 
 ```json
 {
@@ -132,34 +134,34 @@ Response body:
 
 **`GET /health`**
 
-Returns `200 OK` when the service is running.
+Gibt `200 OK` zurück, wenn der Dienst läuft.
 
-#### Retrieval settings (`rag.py`)
+#### Retrieval-Einstellungen (`rag.py`)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `COLLECTION_NAME` | `Dev_Test` | Qdrant collection to query |
-| `SIMILARITY_TOP_RES` | `5` | Maximum number of chunks to return |
-| `SIMILARITY_CUTOFF` | `0.80` | Minimum cosine similarity score |
-| `DOCUMENT_MATCH_THRESHOLD` | `0.80` | Minimum fuzzy score for model-name filter |
-| `embed_model` | `intfloat/multilingual-e5-large` | Hugging Face embedding model (1024-dim) |
+| Variable | Standardwert | Beschreibung |
+|----------|-------------|--------------|
+| `COLLECTION_NAME` | `Dev_Test` | Zu abfragende Qdrant-Kollektion |
+| `SIMILARITY_TOP_RES` | `5` | Maximale Anzahl zurückgegebener Abschnitte |
+| `SIMILARITY_CUTOFF` | `0.80` | Minimaler Cosinus-Ähnlichkeitswert |
+| `DOCUMENT_MATCH_THRESHOLD` | `0.80` | Minimaler Fuzzy-Score für den Modellnamenfilter |
+| `embed_model` | `intfloat/multilingual-e5-large` | Hugging Face Einbettungsmodell (1024-dimensional) |
 
-#### Vector database (`create_vector_db.py`)
+#### Vektordatenbank (`create_vector_db.py`)
 
-Run once (or whenever PDF manuals change) to populate the Qdrant collection.
+Einmalig ausführen (oder bei Änderungen an den PDF-Handbüchern), um die Qdrant-Kollektion zu befüllen.
 
-| Setting | Value |
-|---------|-------|
-| Chunk size | 800 characters |
-| Chunk overlap | 150 characters |
-| Batch size | 50 nodes per upsert |
-| Collection vector size | 1024 (matches `multilingual-e5-large`) |
-| Distance metric | Cosine |
+| Einstellung | Wert |
+|-------------|------|
+| Chunk-Größe | 800 Zeichen |
+| Chunk-Überlappung | 150 Zeichen |
+| Batch-Größe | 50 Nodes pro Upsert |
+| Kollektion-Vektorgröße | 1024 (passend zu `multilingual-e5-large`) |
+| Distanzmetrik | Kosinus |
 
-Place PDF files in `Context_Handler/pdfs/` before running the script. Optionally add source URLs to `pdf_sources.json` so the bot can link back to the original document.
+PDF-Dateien vor dem Ausführen des Skripts in `Context_Handler/pdfs/` ablegen. Optional können in `pdf_sources.json` Quell-URLs für jedes PDF hinterlegt werden, damit der Bot auf das Originaldokument verlinken kann.
 
 ```bash
-# Run from the repository root
+# Vom Repository-Stammverzeichnis ausführen
 python Context_Handler/create_vector_db.py
 ```
 
@@ -167,53 +169,63 @@ python Context_Handler/create_vector_db.py
 
 ### Request Handler
 
-**Directory:** `Request_Handler/`  
+**Verzeichnis:** `Request_Handler/`  
 **Port:** `8000`
 
-#### Responsibilities
+#### Aufgaben
 
-- Maintains a global conversation history (system prompt + user/assistant turns).
-- Fetches relevant context from the Context Handler before each LLM call.
-- Calls Azure OpenAI chat completions and returns the answer to the frontend.
-- Exposes session management so the frontend can reset conversation history.
+- Verwaltung einer globalen Konversationshistorie (Systemprompt + Nutzer-/Assistenten-Nachrichten).
+- Abruf von relevantem Kontext vom Context Handler vor jedem LLM-Aufruf.
+- Aufruf der Azure OpenAI Chat Completions und Rückgabe der Antwort an das Frontend.
+- Bereitstellung von Sitzungsverwaltung, damit das Frontend die Konversationshistorie zurücksetzen kann.
 
-#### Key files
+#### Wichtige Dateien
 
-| File | Purpose |
-|------|---------|
-| `requesthandler.py` | FastAPI application with `/api/chat` and `/api/session/init` endpoints |
-| `system_prompt.txt` | System instructions loaded at startup (can be edited without code changes) |
-| `gunicorn.conf.py` | Gunicorn config: 1 UvicornWorker, port 8000, 120 s timeout |
+| Datei | Zweck |
+|-------|-------|
+| `requesthandler.py` | FastAPI-Anwendung mit den Endpunkten `/api/chat` und `/api/session/init` |
+| `system_prompt.txt` | Beim Start geladene Systemanweisungen für das LLM (ohne Code-Änderungen editierbar) |
+| `gunicorn.conf.py` | Gunicorn-Konfiguration: 1 UvicornWorker, Port 8000, 120 s Timeout |
 
-#### API endpoints
+#### System-Prompt
+
+Der Systemprompt (`system_prompt.txt`) definiert das Verhalten des Bots:
+
+- **Identität:** Spezialisierter technischer Support-Assistent für Miele-Außendienst-Techniker.
+- **Antwortregeln:** Ausschließlich auf Basis der abgerufenen Dokumentation antworten – keine Halluzinationen. Jede Aussage muss mit einer Quellenangabe (Dokumentname, Seite) belegt werden.
+- **JSON-Formular-Tool:** Bei Nennung von Problem, Modellname oder Fehlercode wird automatisch ein strukturiertes Formular (`fill_json_form`) befüllt, das den Kontext-Abruf triggert.
+- **Antwortformat:** Strukturierte Antworten mit Abschnitten für Problemübersicht, Quelldokumentation, Diagnose & Lösung, Sicherheitshinweise, Wartungsempfehlungen und nächste Schritte.
+- **Sprache:** Passt sich automatisch an die Sprache des Technikers an (Deutsch, Englisch o. a.).
+
+#### API-Endpunkte
 
 **`POST /api/chat`**
 
-Request body:
+Anfrage-Body:
 
 ```json
 {
-  "message": "My dishwasher shows error F-404. What should I do?",
+  "message": "Mein Geschirrspüler zeigt Fehler F-404. Was soll ich tun?",
   "sessionId": "abc123",
   "model": "PFD 401"
 }
 ```
 
-> `model` is optional. When provided, it is forwarded to the Context Handler for document filtering.
+> `model` ist optional. Wenn angegeben, wird es zur Dokumentenfilterung an den Context Handler weitergeleitet.
 
-Response body:
+Antwort-Body:
 
 ```json
 {
-  "answer": "Error F-404 indicates a water inlet issue. Please check..."
+  "answer": "Fehler F-404 weist auf ein Problem mit dem Wasserzulauf hin. Bitte prüfen Sie..."
 }
 ```
 
 **`POST /api/session/init`**
 
-Resets the global conversation history to the initial system prompt.
+Setzt die globale Konversationshistorie auf den anfänglichen Systemprompt zurück.
 
-Request body:
+Anfrage-Body:
 
 ```json
 {
@@ -221,7 +233,7 @@ Request body:
 }
 ```
 
-Response body:
+Antwort-Body:
 
 ```json
 {
@@ -230,87 +242,90 @@ Response body:
 }
 ```
 
-Interactive API docs (Swagger UI) are available at `http://localhost:8000/docs`.
+Interaktive API-Dokumentation (Swagger UI) ist unter `http://localhost:8000/docs` verfügbar.
 
-#### Configuration
+#### Konfiguration
 
-| Variable / Setting | Default | Description |
-|--------------------|---------|-------------|
-| `MAX_TOKENS` | `100` | Maximum tokens per Azure OpenAI response |
-| `CONTEXT_HANDLER_URL` | `http://localhost:5000/context` | Context Handler endpoint (overridden in Docker) |
-| `system_prompt.txt` | See file | System instructions for the LLM |
-| `allow_origins` | `["*"]` | CORS – restrict before deploying to production |
-| Azure `api_version` | `2024-02-01` | Azure OpenAI API version |
+| Variable / Einstellung | Standardwert | Beschreibung |
+|------------------------|-------------|--------------|
+| `MAX_TOKENS` | `100` | Maximale Token pro Azure OpenAI-Antwort |
+| `CONTEXT_HANDLER_URL` | `http://localhost:5000/context` | Context Handler-Endpunkt (in Docker überschrieben) |
+| `system_prompt.txt` | Siehe Datei | Systemanweisungen für das LLM |
+| `allow_origins` | `["*"]` | CORS – vor dem Produktionseinsatz einschränken |
+| Azure `api_version` | `2024-02-01` | Azure OpenAI API-Version |
+| Gunicorn `workers` | `1` | Anzahl der Gunicorn-Worker-Prozesse |
+| Gunicorn `timeout` | `120` | Request-Timeout in Sekunden |
 
 ---
 
 ### Webpage
 
-**Directory:** `webpage/`  
-**Port (Docker):** `8080` → served by Nginx on internal port 80  
+**Verzeichnis:** `webpage/`  
+**Port (Docker):** `8080` → von Nginx auf internem Port 80 bereitgestellt  
 
-A self-contained single-page application that requires no build step.
+Eine eigenständige Single-Page-Anwendung, die keinen Build-Schritt erfordert.
 
-| Feature | Description |
-|---------|-------------|
-| **Chat interface** | User and bot messages displayed as styled bubbles in a scrollable window |
-| **Scroll helper** | Floating ⬇ button jumps to the latest message when the user scrolls up |
-| **Light / dark theme** | Toggle button (🌙) switches the `data-theme` attribute; CSS custom properties handle theming |
-| **Speech-to-Text (STT)** | 🎤 button uses the Web Speech API (`de-DE`); transcript is inserted into the input field. Supported in Chrome, Edge, and Safari |
-| **Text-to-Speech (TTS)** | Every bot reply is read aloud via the Web Speech API (`de-DE`, prefers Google/Hedda German voice) |
-| **Backend URL** | Configured via `API_URL` in `script.js` (default: `http://localhost:8000/api/chat`) |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- **Docker** and **Docker Compose** (v2) installed
-- An **Azure OpenAI** resource with a deployed chat model (e.g. `gpt-4o-mini`)
-- A **Qdrant** cloud cluster with API credentials
-- A **Hugging Face** account token (for downloading the embedding model)
-- A modern browser with Web Speech API support (Chrome, Edge, or Safari) for voice features
+| Funktion | Beschreibung |
+|----------|-------------|
+| **Chat-Oberfläche** | Nutzer- und Bot-Nachrichten werden als gestaltete Sprechblasen in einem scrollbaren Fenster angezeigt |
+| **Scroll-Helfer** | Schwebende ⬇-Schaltfläche springt zur neuesten Nachricht, wenn der Nutzer nach oben scrollt |
+| **Hell-/Dunkel-Theme** | Umschalter (🌙) wechselt das `data-theme`-Attribut; CSS Custom Properties übernehmen das Theming |
+| **Spracheingabe (STT)** | 🎤-Schaltfläche nutzt die Web Speech API (`de-DE`); Transkript wird in das Eingabefeld eingefügt. Unterstützt in Chrome, Edge und Safari |
+| **Sprachausgabe (TTS)** | Jede Bot-Antwort wird über die Web Speech API (`de-DE`, bevorzugt Google/Hedda deutsche Stimme) vorgelesen |
+| **Backend-URL** | Konfiguriert über `API_URL` in `script.js` (Standard: `http://localhost:8000/api/chat`) |
+| **Markdown-Rendering** | Bot-Antworten werden mit `marked.js` gerendert und mit `DOMPurify` bereinigt |
 
 ---
 
-### Step 1 – Configure Environment Variables
+## Erste Schritte
 
-Copy the example file and fill in all values:
+### Voraussetzungen
+
+- **Docker** und **Docker Compose** (v2) installiert
+- Eine **Azure OpenAI**-Ressource mit einem bereitgestellten Chat-Modell (z. B. `gpt-4o-mini`)
+- Ein **Qdrant** Cloud-Cluster mit API-Zugangsdaten
+- Ein **Hugging Face**-Account-Token (zum Herunterladen des Einbettungsmodells)
+- Ein moderner Browser mit Web Speech API-Unterstützung (Chrome, Edge oder Safari) für Sprachfunktionen
+
+---
+
+### Schritt 1 – Umgebungsvariablen konfigurieren
+
+Beispieldatei kopieren und alle Werte eintragen:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your credentials (see [Environment Variables Reference](#environment-variables-reference) for details).
+Die `.env`-Datei mit den eigenen Zugangsdaten befüllen (Details siehe [Referenz der Umgebungsvariablen](#referenz-der-umgebungsvariablen)).
 
-> ⚠️ **Never commit `.env` to version control.** It is already listed in `.gitignore`.
+> ⚠️ **Die `.env`-Datei niemals in die Versionskontrolle einchecken.** Sie ist bereits in `.gitignore` eingetragen.
 
 ---
 
-### Step 2 – Populate the Vector Database
+### Schritt 2 – Vektordatenbank befüllen
 
-Run this once (or whenever PDF manuals change) to index documents into Qdrant.
+Einmalig ausführen (oder bei Änderungen an den PDF-Handbüchern), um Dokumente in Qdrant zu indexieren.
 
-1. Place your appliance PDF manuals in `Context_Handler/pdfs/`.
-2. Optionally add source URLs for each PDF in `Context_Handler/pdf_sources.json`:
+1. Geräte-PDF-Handbücher in `Context_Handler/pdfs/` ablegen.
+2. Optional Quell-URLs für jedes PDF in `Context_Handler/pdf_sources.json` eintragen:
 
 ```json
 {
-  "my-appliance-manual": {
-    "source": "https://example.com/manuals/my-appliance-manual.pdf"
+  "mein-geraete-handbuch": {
+    "source": "https://example.com/manuals/mein-geraete-handbuch.pdf"
   }
 }
 ```
 
-3. Run the indexing script (requires Python 3.10+ and the Context Handler dependencies):
+3. Das Indexierungsskript ausführen (erfordert Python 3.10+ und die Context Handler-Abhängigkeiten):
 
 ```bash
 pip install -r Context_Handler/requirements.txt
 python Context_Handler/create_vector_db.py
 ```
 
-Expected output:
+Erwartete Ausgabe:
 
 ```
 Lade PDFs...
@@ -324,29 +339,29 @@ Alle Nodes erfolgreich in Qdrant indexiert!
 
 ---
 
-### Step 3 – Start All Services with Docker Compose
+### Schritt 3 – Alle Dienste mit Docker Compose starten
 
-From the repository root:
+Vom Repository-Stammverzeichnis aus:
 
 ```bash
 docker compose up --build
 ```
 
-This starts three containers on the shared `rag-network`:
+Dadurch werden drei Container im gemeinsamen `rag-network` gestartet:
 
-| Container | Image built from | Exposed port |
-|-----------|-----------------|--------------|
+| Container | Image erstellt aus | Exposed Port |
+|-----------|-------------------|--------------|
 | `context-handler` | `Context_Handler/` | 5000 |
 | `request-handler-cont` | `Request_Handler/` | 8000 |
 | `webpage_deployment` | `webpage/` | 8080 |
 
-To run in detached mode:
+Im Hintergrundmodus starten:
 
 ```bash
 docker compose up --build -d
 ```
 
-To stop all services:
+Alle Dienste stoppen:
 
 ```bash
 docker compose down
@@ -354,85 +369,88 @@ docker compose down
 
 ---
 
-### Step 4 – Open the Frontend
+### Schritt 4 – Frontend öffnen
 
-Open `http://localhost:8080` in your browser.
+`http://localhost:8080` im Browser öffnen.
 
-You should see the chat interface. Type a question (or press 🎤 for voice input) and click **Send** to interact with the bot.
+Die Chat-Oberfläche sollte erscheinen. Eine Frage eingeben (oder 🎤 für Spracheingabe drücken) und auf **Send** klicken, um mit dem Bot zu interagieren.
 
-The Request Handler Swagger UI is available at `http://localhost:8000/docs`.
-
----
-
-## Environment Variables Reference
-
-All variables are defined in `.env` (copy from `.env.example`).
-
-| Variable | Required by | Description |
-|----------|------------|-------------|
-| `AZURE_OPENAI_ENDPOINT` | Request Handler | Azure OpenAI resource endpoint URL |
-| `AZURE_OPENAI_API_KEY` | Request Handler | Azure OpenAI API key |
-| `AZURE_OPENAI_DEPLOYMENT` | Request Handler | Azure deployment / model name (e.g. `gpt-4o-mini`) |
-| `QDRANT_URL` | Context Handler | URL of the Qdrant cloud cluster |
-| `QDRANT_API_KEY` | Context Handler | Qdrant API key |
-| `HF_TOKEN` | Context Handler | Hugging Face token for downloading the embedding model |
-| `WEBSERVER_TOKEN` | Both | Shared bearer token used by the Request Handler to authenticate calls to the Context Handler |
+Die Swagger UI des Request Handlers ist unter `http://localhost:8000/docs` erreichbar.
 
 ---
 
-## Configuration Reference
+## Referenz der Umgebungsvariablen
 
-| File | Setting | Description |
-|------|---------|-------------|
-| `Context_Handler/rag.py` | `COLLECTION_NAME` | Qdrant collection to query |
-| `Context_Handler/rag.py` | `SIMILARITY_TOP_RES` | Max number of retrieved chunks |
-| `Context_Handler/rag.py` | `SIMILARITY_CUTOFF` | Minimum similarity score (0–1) |
-| `Context_Handler/rag.py` | `DOCUMENT_MATCH_THRESHOLD` | Fuzzy score threshold for model-name filter |
-| `Context_Handler/create_vector_db.py` | `COLLECTION_NAME` | Target Qdrant collection for indexing |
-| `Context_Handler/create_vector_db.py` | `BATCH_SIZE` | Nodes per upsert batch |
-| `Context_Handler/pdf_sources.json` | — | Maps PDF stems to public source URLs |
-| `Request_Handler/requesthandler.py` | `MAX_TOKENS` | Maximum tokens per LLM response |
-| `Request_Handler/requesthandler.py` | `CONTEXT_HANDLER_URL` | Context Handler endpoint |
-| `Request_Handler/requesthandler.py` | `allow_origins` | CORS allowed origins (restrict for production) |
-| `Request_Handler/system_prompt.txt` | — | System instructions for the LLM (edit without code changes) |
-| `Request_Handler/gunicorn.conf.py` | `workers` | Number of Gunicorn workers (default: 1) |
-| `webpage/script.js` | `API_URL` | Request Handler endpoint called by the frontend |
+Alle Variablen werden in `.env` definiert (Vorlage aus `.env.example` kopieren).
+
+| Variable | Benötigt von | Beschreibung |
+|----------|-------------|--------------|
+| `AZURE_OPENAI_ENDPOINT` | Request Handler | Endpunkt-URL der Azure OpenAI-Ressource |
+| `AZURE_OPENAI_API_KEY` | Request Handler | Azure OpenAI API-Schlüssel |
+| `AZURE_OPENAI_DEPLOYMENT` | Request Handler | Azure-Deployment / Modellname (z. B. `gpt-4o-mini`) |
+| `QDRANT_URL` | Context Handler | URL des Qdrant Cloud-Clusters |
+| `QDRANT_API_KEY` | Context Handler | Qdrant API-Schlüssel |
+| `HF_TOKEN` | Context Handler | Hugging Face Token zum Herunterladen des Einbettungsmodells |
+| `WEBSERVER_TOKEN` | Beide | Gemeinsames Bearer-Token, das der Request Handler zur Authentifizierung gegenüber dem Context Handler verwendet |
+| `CONTEXT_HANDLER_URL` | Request Handler | URL des Context Handler-Endpunkts (im Docker-Netzwerk: `http://context-handler:5000/context`) |
+| `CONTEXT_HANDLER_TOKEN` | Request Handler | Token zur Authentifizierung am Context Handler (entspricht `WEBSERVER_TOKEN`) |
 
 ---
 
-## Troubleshooting
+## Konfigurationsreferenz
 
-### Container does not start
+| Datei | Einstellung | Beschreibung |
+|-------|-------------|--------------|
+| `Context_Handler/rag.py` | `COLLECTION_NAME` | Zu abfragende Qdrant-Kollektion |
+| `Context_Handler/rag.py` | `SIMILARITY_TOP_RES` | Maximale Anzahl abgerufener Abschnitte |
+| `Context_Handler/rag.py` | `SIMILARITY_CUTOFF` | Minimaler Ähnlichkeitswert (0–1) |
+| `Context_Handler/rag.py` | `DOCUMENT_MATCH_THRESHOLD` | Fuzzy-Score-Schwellenwert für den Modellnamenfilter |
+| `Context_Handler/create_vector_db.py` | `COLLECTION_NAME` | Ziel-Qdrant-Kollektion für die Indexierung |
+| `Context_Handler/create_vector_db.py` | `BATCH_SIZE` | Nodes pro Upsert-Batch |
+| `Context_Handler/pdf_sources.json` | — | Verknüpft PDF-Dateinamen mit öffentlichen Quell-URLs |
+| `Request_Handler/requesthandler.py` | `MAX_TOKENS` | Maximale Token pro LLM-Antwort |
+| `Request_Handler/requesthandler.py` | `CONTEXT_HANDLER_URL` | Context Handler-Endpunkt |
+| `Request_Handler/requesthandler.py` | `allow_origins` | CORS-erlaubte Ursprünge (für Produktion einschränken) |
+| `Request_Handler/system_prompt.txt` | — | Systemanweisungen für das LLM (ohne Code-Änderungen editierbar) |
+| `Request_Handler/gunicorn.conf.py` | `workers` | Anzahl der Gunicorn-Worker (Standard: 1) |
+| `Request_Handler/gunicorn.conf.py` | `timeout` | Request-Timeout in Sekunden (Standard: 120) |
+| `webpage/script.js` | `API_URL` | Vom Frontend aufgerufener Request Handler-Endpunkt |
+
+---
+
+## Fehlerbehebung
+
+### Container startet nicht
 
 ```bash
-# View logs for a specific service
+# Logs eines bestimmten Dienstes anzeigen
 docker compose logs context-handler
 docker compose logs request-handler
 docker compose logs webpage
 
-# Rebuild from scratch
+# Von Grund auf neu erstellen
 docker compose down
 docker compose build --no-cache
 docker compose up -d
 ```
 
-### Context Handler cannot connect to Qdrant
+### Context Handler kann keine Verbindung zu Qdrant herstellen
 
-- Verify `QDRANT_URL` and `QDRANT_API_KEY` in your `.env` file.
-- Check network connectivity (firewall, proxy).
-- Ensure the Qdrant collection has been created by running `create_vector_db.py`.
+- `QDRANT_URL` und `QDRANT_API_KEY` in der `.env`-Datei überprüfen.
+- Netzwerkkonnektivität prüfen (Firewall, Proxy).
+- Sicherstellen, dass die Qdrant-Kollektion durch Ausführen von `create_vector_db.py` erstellt wurde.
 
-### Request Handler returns 503
+### Request Handler gibt 503 zurück
 
-The Azure OpenAI client failed to initialise. Check that `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_DEPLOYMENT` are all set in `.env`.
+Der Azure OpenAI-Client konnte nicht initialisiert werden. Überprüfen, ob `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY` und `AZURE_OPENAI_DEPLOYMENT` alle in der `.env`-Datei gesetzt sind.
 
-### No context is retrieved (empty answers)
+### Es wird kein Kontext abgerufen (leere Antworten)
 
-- Confirm PDFs have been indexed (`create_vector_db.py` completed successfully).
-- Ensure `COLLECTION_NAME` in `rag.py` matches the collection used during indexing.
-- Lower `SIMILARITY_CUTOFF` in `rag.py` if too few chunks pass the threshold.
-- Check the Context Handler health endpoint: `GET http://localhost:5000/health`.
+- Bestätigen, dass PDFs indexiert wurden (`create_vector_db.py` erfolgreich abgeschlossen).
+- Sicherstellen, dass `COLLECTION_NAME` in `rag.py` mit der beim Indexieren verwendeten Kollektion übereinstimmt.
+- `SIMILARITY_CUTOFF` in `rag.py` verringern, wenn zu wenige Abschnitte den Schwellenwert überschreiten.
+- Den Health-Endpunkt des Context Handlers prüfen: `GET http://localhost:5000/health`.
 
-### Voice features do not work
+### Sprachfunktionen funktionieren nicht
 
-The Web Speech API requires a secure context (HTTPS) or `localhost`. If accessing the app from another machine, serve the frontend over HTTPS or use a tunnelling tool like `ngrok`.
+Die Web Speech API erfordert einen sicheren Kontext (HTTPS) oder `localhost`. Wenn auf die App von einem anderen Rechner zugegriffen wird, das Frontend über HTTPS bereitstellen oder ein Tunneling-Tool wie `ngrok` verwenden.
